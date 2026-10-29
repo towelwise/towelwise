@@ -13,7 +13,7 @@ This is the working roadmap: the order things get built, and what "done" means f
 
 | Phase | What | Status |
 |---|---|---|
-| 0 | Claim the names | Done, Open VSX verification pending |
+| 0 | Claim the names | Done |
 | 1 | Set up the workshop | Next |
 | 2 | First prototype: **Towelwise** (sidebar, layouts, hyperspace, beginner profile) | — |
 | 3 | The memory experiment (Hindsight on Windows) | Can run alongside Phase 2 |
@@ -31,7 +31,7 @@ The guiding rule: **a small, real prototype in weeks, not a finished suite in 20
 - [x] `towelwise/.github` org profile README
 - [x] `towelwise.github.io` site, live on GitHub Pages
 - [x] VS Code Marketplace publisher `towelwise`
-- [ ] Open VSX namespace `towelwise`: Eclipse account and Publisher Agreement done; verification claim pending (EclipseFdn/open-vsx.org #14818)
+- [x] Open VSX namespace `towelwise`: Eclipse account and Publisher Agreement done; namespace verified 2026-10-29 (EclipseFdn/open-vsx.org #14818)
 - [x] License: Apache 2.0
 
 **Done when:** every name is held, and the license is picked so the first repo can include it.
