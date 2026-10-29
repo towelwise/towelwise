@@ -1,0 +1,31 @@
+{
+  "name": "towelwise",
+  "displayName": "Towelwise",
+  "description": "Towelwise core extension.",
+  "version": "0.0.1",
+  "publisher": "towelwise",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "scripts": {
+    "build": "tsc -p .",
+    "pretest": "npm run build",
+    "test": "vscode-test",
+    "prepackage": "node -e \"require('fs').copyFileSync('../../LICENSE','LICENSE')\"",
+    "package": "vsce package --no-dependencies --allow-missing-repository --out towelwise.vsix"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "~1.90.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.0.0"
+  }
+}
