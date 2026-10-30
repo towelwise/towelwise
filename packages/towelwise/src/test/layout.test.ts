@@ -193,12 +193,13 @@ suite('layout', () => {
     assert.deepStrictEqual(vs.logged, ['restore layout (containers only, on startup)', 'ran workbench.view.extension.codex (container codex)']);
   });
 
-  test('a command that fails is logged with its error before the error is reported', async () => {
-    await config().update(COMMANDS, ['agent.openChat'], GLOBAL);
-    const vs = fakeVsCode(['agent.openChat'], {}, 'agent.openChat');
+  test('a command that fails is logged with its error before the error is reported, and stops Restore', async () => {
+    await config().update(COMMANDS, ['agent.openChat', 'agent.later'], GLOBAL);
+    const vs = fakeVsCode(['agent.openChat', 'agent.later'], {}, 'agent.openChat');
 
     await assert.rejects(restoreLayout(vs), /command failed/);
     assert.deepStrictEqual(vs.logged, ['restore layout', 'FAILED agent.openChat: command failed']);
+    assert.deepStrictEqual(vs.ran, ['agent.openChat']); // agent.later never ran
   });
 
   test('an empty layout runs nothing', async () => {
