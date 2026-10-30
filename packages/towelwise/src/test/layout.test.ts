@@ -13,13 +13,19 @@ const GLOBAL = vscode.ConfigurationTarget.Global;
 const config = () => vscode.workspace.getConfiguration();
 
 // A stand-in for VS Code: which show commands exist, each container's first view, and a record of the commands that ran.
-const fakeVsCode = (available: string[], views: Record<string, string> = {}) => {
+const fakeVsCode = (available: string[], views: Record<string, string> = {}, failOn?: string) => {
   const ran: string[] = [];
+  const logged: string[] = [];
   return {
     ran,
+    logged,
     available: new Set(available),
     views: new Map(Object.entries(views)),
-    run: async (command: string) => void ran.push(command),
+    run: async (command: string) => {
+      ran.push(command);
+      if (command === failOn) throw new Error('command failed');
+    },
+    log: (line: string) => void logged.push(line),
   };
 };
 
@@ -161,6 +167,39 @@ suite('layout', () => {
       assert.deepStrictEqual(await restoreLayout(vs), { ran: [], skipped: [] }, JSON.stringify(wrong));
     }
     assert.deepStrictEqual(vs.ran, []);
+  });
+
+  test('Restore logs what it ran and what it skipped', async () => {
+    await config().update(CONTAINERS, ['codex', 'gone'], GLOBAL);
+    await config().update(COMMANDS, ['agent.openChat', 'agent.missing'], GLOBAL);
+    const vs = fakeVsCode(['workbench.view.extension.codex', 'agent.openChat']);
+
+    await restoreLayout(vs);
+    assert.deepStrictEqual(vs.logged, [
+      'restore layout',
+      'ran workbench.view.extension.codex (container codex)',
+      'skipped gone: no such command',
+      'ran agent.openChat',
+      'skipped agent.missing: no such command',
+    ]);
+  });
+
+  test('startup apply says in the log that it runs containers only', async () => {
+    await config().update(CONTAINERS, ['codex'], GLOBAL);
+    await config().update(ON_STARTUP, true, GLOBAL);
+    const vs = fakeVsCode(['workbench.view.extension.codex']);
+
+    await applyOnStartup(storageDir, async () => vs);
+    assert.deepStrictEqual(vs.logged, ['restore layout (containers only, on startup)', 'ran workbench.view.extension.codex (container codex)']);
+  });
+
+  test('a command that fails is logged with its error before the error is reported, and stops Restore', async () => {
+    await config().update(COMMANDS, ['agent.openChat', 'agent.later'], GLOBAL);
+    const vs = fakeVsCode(['agent.openChat', 'agent.later'], {}, 'agent.openChat');
+
+    await assert.rejects(restoreLayout(vs), /command failed/);
+    assert.deepStrictEqual(vs.logged, ['restore layout', 'FAILED agent.openChat: command failed']);
+    assert.deepStrictEqual(vs.ran, ['agent.openChat']); // agent.later never ran
   });
 
   test('an empty layout runs nothing', async () => {
