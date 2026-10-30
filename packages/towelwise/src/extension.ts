@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { isActive, restore, toggle } from './hyperspace';
+import { applyOnStartup, chooseLayout, liveVsCode, restoreLayout } from './layout';
 
 const showError = (e: unknown) => void vscode.window.showErrorMessage(e instanceof Error ? e.message : String(e));
 
@@ -20,7 +21,23 @@ export function activate(context: vscode.ExtensionContext): void {
         showError(e);
       }
     }),
+    vscode.commands.registerCommand('towelwise.layout.choose', () => chooseLayout().catch(showError)),
+    vscode.commands.registerCommand('towelwise.layout.restore', async () => {
+      try {
+        const { shown, skipped } = await restoreLayout(await liveVsCode());
+        if (shown.length + skipped.length === 0) {
+          void vscode.window.showInformationMessage('Towelwise: no layout chosen yet. Run Towelwise: Choose Layout.');
+        } else if (skipped.length > 0) {
+          void vscode.window.showInformationMessage(`Towelwise: skipped ${skipped.join(', ')}, which is not available.`);
+        }
+      } catch (e) {
+        showError(e);
+      }
+    }),
   );
+
+  // Quiet on purpose: a missing agent should not nag on every window open.
+  void liveVsCode().then((vs) => applyOnStartup(storageDir, vs)).then(undefined, showError);
 
   if (isActive(storageDir)) {
     void vscode.window
