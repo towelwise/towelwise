@@ -38,12 +38,16 @@ No new decision record: a declared layout follows directly from [0003](../../doc
 - **Smoke checks:** lint, build and package exit 0 locally and in CI on the PR.
 - **Manual:** after installing the VSIX and reloading, choose Antigravity and Codex in Choose Layout; close both side bars and run Restore Layout; open another project and run it there; turn on startup apply and reload; jump to hyperspace with a side bar set to hide, reload, and confirm startup apply did not reopen it.
 
-## Implementer defaults (not approved; flag in review)
+## Implementer defaults (approved by the user, 2026-10-30, after trying the installed build)
 
-- The default key combination, checked against VS Code's and the installed agents' existing bindings.
-- Setting names (for example under `towelwise.layout.*`) and how a container is identified in the setting.
-- Exactly which containers the picker lists (extension containers in the side bars and panel, plus built-in Chat) and how each is labelled.
-- How "not available" is detected (for example, the container is not contributed by any enabled extension).
+- The default key: `Ctrl+Alt+L`, checked against the installed agents' bindings.
+- Setting names: `towelwise.layout.containers` (an ordered list of container ids) and `towelwise.layout.applyOnStartup`, both application-scoped.
+- The picker lists the side-bar and secondary-side-bar containers that installed extensions contribute, plus built-in Chat, each labelled with its title, area and id. It does not list bottom-panel containers.
+- "Not available" means no show command exists for the container in VS Code.
+
+## Manual verification so far (user, 2026-10-30)
+
+Confirmed on the user's machine with Antigravity, Claude Code, Codex and Chat: Choose Layout saved a selection and Restore Layout reopened the closed side bars as chosen; hyperspace with one agent open jumped and restored correctly; `Ctrl+Alt+L` after that brought back the three-column layout. Still unchecked: restore in another project, startup apply, and startup apply while hyperspace hides a side bar.
 
 ## Out of scope
 
