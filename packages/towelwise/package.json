@@ -118,6 +118,15 @@
             "default": false,
             "description": "Also apply your layout when a window opens. Skipped while hyperspace is on.",
             "scope": "application"
+          },
+          "towelwise.layout.commands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "scope": "application",
+            "markdownDescription": "Command ids to run after the containers when you run **Towelwise: Restore Layout**, in order, for panels that are not side bars (for example an agent that opens as an editor tab). Not run by apply on startup. A command that opens a new tab each time can pile up duplicates if the tab is already open."
           }
         }
       }

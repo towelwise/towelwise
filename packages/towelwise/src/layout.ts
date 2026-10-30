@@ -24,8 +24,11 @@ function showCommand(id: string, vs: LayoutEnv): string | undefined {
 }
 
 const layoutConfig = () => vscode.workspace.getConfiguration('towelwise.layout');
-// A hand-edited setting may hold anything; only strings can be container ids.
-const savedContainers = () => layoutConfig().get<unknown[]>('containers', []).filter((id): id is string => typeof id === 'string');
+// A hand-edited setting may hold anything: a non-list counts as empty, and only strings in a list can be ids.
+const savedList = (key: string): string[] => {
+  const value = layoutConfig().get<unknown>(key);
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+};
 
 interface Manifest {
   contributes?: {
@@ -62,19 +65,28 @@ export async function liveVsCode(): Promise<LayoutEnv> {
 }
 
 /**
- * Runs the show command for each saved container, in order. A container with no show command is skipped and
- * reported. "Ran" is not "visible": VS Code cannot say which of an extension's containers is currently enabled.
+ * Runs the show command for each saved container, in order, then (unless asked not to) each saved layout command,
+ * such as an agent's own "open chat". Anything with no command is skipped and reported. "Ran" is not "visible":
+ * VS Code cannot say which of an extension's containers is currently enabled, or whether a tab is already open.
  */
-export async function restoreLayout(vs: LayoutEnv): Promise<{ ran: string[]; skipped: string[] }> {
+export async function restoreLayout(vs: LayoutEnv, withCommands = true): Promise<{ ran: string[]; skipped: string[] }> {
   const ran: string[] = [];
   const skipped: string[] = [];
-  for (const id of savedContainers()) {
+  for (const id of savedList('containers')) {
     const command = showCommand(id, vs);
     if (command) {
       await vs.run(command);
       ran.push(id);
     } else {
       skipped.push(id);
+    }
+  }
+  for (const command of withCommands ? savedList('commands') : []) {
+    if (vs.available.has(command)) {
+      await vs.run(command);
+      ran.push(command);
+    } else {
+      skipped.push(command);
     }
   }
   return { ran, skipped };
@@ -87,7 +99,8 @@ export async function applyOnStartup(storageDir: string, env: () => Promise<Layo
   const vs = await env();
   // Another window may have started hyperspace while the environment loaded.
   if (isActive(storageDir)) return false;
-  await restoreLayout(vs);
+  // Containers only: a layout command may open a new tab, and VS Code has usually restored the open ones already.
+  await restoreLayout(vs, false);
   return true;
 }
 
@@ -129,7 +142,7 @@ export function orderChoices(saved: string[], found: Choice[]): Choice[] {
 
 /** Lets the person pick the containers for the layout. Resolves false if they cancel. */
 export async function chooseLayout(): Promise<boolean> {
-  const saved = savedContainers();
+  const saved = savedList('containers');
   const found = discoverContainers(await liveVsCode());
   const choices = orderChoices(saved, found);
   const picked = await vscode.window.showQuickPick(
