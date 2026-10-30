@@ -8,6 +8,7 @@ import { applyOnStartup, orderChoices, restoreLayout, viewsByContainer } from '.
 
 const CONTAINERS = 'towelwise.layout.containers';
 const ON_STARTUP = 'towelwise.layout.applyOnStartup';
+const COMMANDS = 'towelwise.layout.commands';
 const GLOBAL = vscode.ConfigurationTarget.Global;
 const config = () => vscode.workspace.getConfiguration();
 
@@ -33,6 +34,7 @@ suite('layout', () => {
     await config().update(CONTAINERS, undefined, GLOBAL);
     await config().update(CONTAINERS, undefined, vscode.ConfigurationTarget.Workspace).then(undefined, () => undefined);
     await config().update(ON_STARTUP, undefined, GLOBAL);
+    await config().update(COMMANDS, undefined, GLOBAL);
     fs.rmSync(storageDir, { recursive: true, force: true });
   });
 
@@ -120,6 +122,34 @@ suite('layout', () => {
       { id: 'gone', label: 'gone', description: 'Not installed' },
       found[0],
     ]);
+  });
+
+  test('Restore also runs the layout commands, after the containers, in order', async () => {
+    await config().update(CONTAINERS, ['codex'], GLOBAL);
+    await config().update(COMMANDS, ['agent.openChat', 'agent.openPanel'], GLOBAL);
+    const vs = fakeVsCode(['workbench.view.extension.codex', 'agent.openChat', 'agent.openPanel']);
+
+    const result = await restoreLayout(vs);
+    assert.deepStrictEqual(vs.ran, ['workbench.view.extension.codex', 'agent.openChat', 'agent.openPanel']);
+    assert.deepStrictEqual(result, { ran: ['codex', 'agent.openChat', 'agent.openPanel'], skipped: [] });
+  });
+
+  test('a layout command that does not exist is skipped and reported, and the setting is kept', async () => {
+    await config().update(COMMANDS, ['agent.openChat', 'agent.gone', 1], GLOBAL);
+    const vs = fakeVsCode(['agent.openChat']);
+
+    assert.deepStrictEqual(await restoreLayout(vs), { ran: ['agent.openChat'], skipped: ['agent.gone'] });
+    assert.deepStrictEqual(config().get(COMMANDS), ['agent.openChat', 'agent.gone', 1]);
+  });
+
+  test('startup apply runs the containers but not the layout commands', async () => {
+    await config().update(CONTAINERS, ['codex'], GLOBAL);
+    await config().update(COMMANDS, ['agent.openChat'], GLOBAL);
+    await config().update(ON_STARTUP, true, GLOBAL);
+    const vs = fakeVsCode(['workbench.view.extension.codex', 'agent.openChat']);
+
+    assert.strictEqual(await applyOnStartup(storageDir, async () => vs), true);
+    assert.deepStrictEqual(vs.ran, ['workbench.view.extension.codex']);
   });
 
   test('an empty layout runs nothing', async () => {

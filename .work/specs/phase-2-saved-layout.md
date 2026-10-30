@@ -17,7 +17,8 @@ Example (the user's own setup): Antigravity's container in the primary side bar 
 3. If a container in the layout is not available (its extension is not installed or not enabled), the others are still shown and one quiet message names what was skipped. The saved layout is left unchanged.
 4. With an empty layout, Restore Layout does nothing except a quiet message pointing to Choose Layout.
 5. An opt-in setting, off by default, also applies the layout when a window opens. It is skipped while hyperspace is on, so it never reopens what hyperspace hid. Running Restore Layout by hand still applies it during hyperspace.
-6. Root `npm run lint`, `npm run build`, `npm test` and `npm run package` exit 0, and CI passes on the PR.
+6. An application-scoped setting, `towelwise.layout.commands`, lists command ids (for example an agent's own "open chat") that Restore Layout runs after the containers, in order. A listed command that does not exist is skipped and named in the same quiet message, and the setting is unchanged. Apply on startup does not run them. There is no picker for them; the person types the ids.
+7. Root `npm run lint`, `npm run build`, `npm test` and `npm run package` exit 0, and CI passes on the PR.
 
 ## Approved decisions (user, 2026-10-30, grilling session)
 
@@ -27,6 +28,7 @@ Example (the user's own setup): Antigravity's container in the primary side bar 
 - Apply: a command with a default keybinding, plus an opt-in, off-by-default apply when a window opens.
 - A missing container is skipped and named; the layout is not changed.
 - Hyperspace wins on startup: automatic apply is skipped while hyperspace is on.
+- Layout commands (user, 2026-10-30, after Claude Code opened as an editor tab, `claudeCode.preferredLocation: "panel"`, and Restore did not bring a closed chat back): a vendor-neutral list of command ids that Restore runs after the containers, chosen over Claude-specific support (decision 0001) and over doing nothing. Implementer choices, not yet approved: the setting name `towelwise.layout.commands`, no picker, and not running them on startup apply (VS Code usually restores open tabs itself, so a new-tab command could duplicate them).
 - Review of `9f19831` (user, 2026-10-30): a container is shown through its first view's own focus command (it never toggles, so Restore cannot close an agent moved to the bottom panel), with the container command only as a fallback. VS Code cannot say which of an extension's containers is enabled, so the picker lists all of them with area and id, and restore reports which show commands ran, not what became visible. Both layout settings are application-scoped, so a project cannot override them. The first view used for a container is the one from the extension that declares it; another extension's view is only a fallback when the owner contributes none.
 - Test seam: applying a layout, observed through the same stand-in command runner hyperspace tests use. The picker UI and real side bars are checked by hand.
 
@@ -52,7 +54,7 @@ Confirmed on the user's machine with Antigravity, Claude Code, Codex and Chat: C
 ## Out of scope
 
 - Named layouts (roadmap slice 4).
-- The Claude Code editor tab or other agent editor tabs.
+- Detecting, listing or picking agent editor tabs. They are reopened only by commands the person lists in `towelwise.layout.commands`, and a command that opens a new tab each time can duplicate an open one (Towelwise cannot see open tabs).
 - Moving containers between areas, or closing anything.
 - Capturing the current layout automatically.
 - A guided first-run setup (beginner-profile slice).

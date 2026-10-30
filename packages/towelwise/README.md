@@ -18,6 +18,7 @@ Search for `towelwise` in Settings.
 
 - `towelwise.hyperspace.*`: what hyperspace hides (activity bar, status bar, menu bar, side bars, bottom panel), and optional full screen. Start from a windowed window if you turn full screen on.
 - `towelwise.layout.applyOnStartup`: also apply your layout when a window opens. Off by default.
+- `towelwise.layout.commands`: command ids to run after your panels when you restore, for agents that open as an editor tab instead of a side bar. Type the ids yourself; Towelwise cannot see which tabs are open, so a command that opens a new tab each time can duplicate one.
 
 ## Things to know
 
