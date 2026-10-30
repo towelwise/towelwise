@@ -11,7 +11,9 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "scripts": {
     "build": "tsc -p .",
@@ -27,5 +29,54 @@
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.0.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "towelwise.hyperspace.toggle",
+        "title": "Towelwise: Jump to Hyperspace"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "towelwise.hyperspace.toggle",
+        "key": "ctrl+alt+h"
+      }
+    ],
+    "configuration": {
+      "title": "Towelwise: Hyperspace",
+      "properties": {
+        "towelwise.hyperspace.hideActivityBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide the activity bar in hyperspace."
+        },
+        "towelwise.hyperspace.hideStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide the status bar in hyperspace."
+        },
+        "towelwise.hyperspace.hideMenuBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide the menu bar in hyperspace."
+        },
+        "towelwise.hyperspace.hidePrimarySideBar": {
+          "type": "boolean",
+          "default": false,
+          "description": "Close the primary side bar in hyperspace."
+        },
+        "towelwise.hyperspace.hideSecondarySideBar": {
+          "type": "boolean",
+          "default": false,
+          "description": "Close the secondary side bar in hyperspace."
+        },
+        "towelwise.hyperspace.hideBottomPanel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Close the bottom panel in hyperspace."
+        }
+      }
+    }
   }
 }

@@ -15,7 +15,7 @@ This is the working roadmap: the order things get built, and what "done" means f
 |---|---|---|
 | 0 | Claim the names | Done |
 | 1 | Set up the workshop | Done, except `docs/decisions/` |
-| 2 | First prototype: **Towelwise** (sidebar, layouts, hyperspace, beginner profile) | Next |
+| 2 | First prototype: **Towelwise** (hyperspace, layouts, beginner profile) | Next |
 | 3 | The memory experiment (Hindsight on Windows) | Can run alongside Phase 2 |
 | 4 | **Towelwise Recall**: approval inbox, then the Probability Drive | — |
 | 5 | **Towelwise Guide**: fundamentals library first | — |
@@ -55,10 +55,9 @@ The guiding rule: **a small, real prototype in weeks, not a finished suite in 20
 
 The core extension, built in small slices. Each slice ships on its own.
 
-1. **Sidebar with agent buttons.** One colored button per installed AI extension (Claude Code, Codex, others) that opens its official panel. Missing agents offer an install. Buttons only open panels; never a prompt.
+1. **Jump to hyperspace.** One command (or key) hides the chrome and areas you chose, leaving your agents in view; the same command puts your settings back exactly.
 2. **Saved layouts.** Save how your agents are arranged and bring it back with one click, in any project. Reopen a panel that a reload or update lost.
-3. **Jump to hyperspace.** One click hides everything but your agents; one more restores it all.
-4. **Beginner profile.** A quiet ready-made VS Code profile and a first-run walkthrough. Your normal setup stays untouched.
+3. **Beginner profile.** A quiet ready-made VS Code profile and a first-run walkthrough. Your normal setup stays untouched.
 
 **Done when:** you use it every day on your own three-agent layout and it survives reloads and extension updates.
 
@@ -133,7 +132,6 @@ A spike that answers whether Recall's memory works the way the vision says, befo
 |---|---|
 | Weekly hours, so the prototype can be dated honestly | After Phase 2 starts |
 | Which agents first? (Claude Code, Codex, Copilot are clear; check Google's terms for Antigravity/Gemini) | Phase 2 |
-| Where the Towelwise sidebar goes in hyperspace when all side areas hold agents | Phase 2 |
 | Hindsight on Windows as a shared background service? | Phase 3 |
 | Is no-AI memory enough for "why" questions? | Phase 3 |
 | Link approval: user-visible links only, or every internal link? | Phase 4 |
