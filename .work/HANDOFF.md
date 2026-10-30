@@ -1,5 +1,155 @@
 # Handoff
 
+## 2026-10-30 — Codex: review of 7aa999d complete; R1 resolved, no findings
+
+### For the reviewer
+
+No code review remains pending for `236bc49` and its fix `7aa999d`. Codex reviewed all three changed files in `236bc49...7aa999d`: R1 is resolved by the array guard in [layout.ts](../packages/towelwise/src/layout.ts), with regression coverage for strings, null, numbers and objects in [layout.test.ts](../packages/towelwise/src/test/layout.test.ts). No new findings. The earlier R1 entry below is historical; no fix remains outstanding.
+
+Next assistant: continue from the user's next request. Preserve the now-approved setting name `towelwise.layout.commands`, typing command ids without a picker, and excluding commands from startup apply; the current spec records approval. Also preserve the vendor-neutral approach, application scope, `Alt+Shift+J` / `Alt+Shift+L`, container focus behavior and prior hyperspace/walkthrough decisions.
+
+References: [ROADMAP.md](../ROADMAP.md), active [saved-layout spec](specs/phase-2-saved-layout.md), [decisions](../docs/decisions/) (especially 0001 and 0003). Review outcome is recorded in this entry; original finding and reproduction evidence remain below.
+
+### Status
+
+- Branch `feat/layout-commands`; baseline/local `main` `42f52e00e173463a8535dbed2d7d33ccdce3666c`; HEAD `7aa999df1ee7c98983b5d795d22ded408a06b539`. The branch contains feature `236bc49` and fix `7aa999d`.
+- Uncommitted: `.work/HANDOFF.md` only, including pre-existing entries and this addition. No implementation files were edited during either review. No commit, push, PR, publishing or installation was performed; remote state was not queried. Claude's preceding handoff reports the branch is unpushed with no PR and the installed build remains `42f52e0`; these external states were not independently verified.
+- Skills used: `code-review`, `C:/Users/thisi/.agents/skills/code-review/SKILL.md`; `handoff`, `C:/Users/thisi/.agents/skills/handoff/SKILL.md`.
+
+### Checks
+
+Codex independently ran during the completed review of `7aa999d`, on Windows:
+
+- `npm.cmd run lint`: exit 0.
+- `npm.cmd test` outside the sandbox: exit 0; its pretest TypeScript build passed and all 42 tests passed in VS Code 1.144.0, including the new regression case using real configuration updates and the stand-in command runner.
+- `git diff --check 236bc49...7aa999d`: exit 0.
+
+Packaging was not rerun by Codex at `7aa999d` (Claude reports exit 0). Codex's earlier package pass was at `236bc49`, not this fix. CI, installation, real-agent tab behavior, macOS and the VS Code 1.90 floor remain unverified. No tests need rerunning solely for this handoff update.
+
+### Still open
+
+- Manual check of `claude-vscode.editor.openLast` with its tab closed and already open, including duplicate-tab behavior; the installed build needs a separately authorized update before testing this feature.
+- Earlier manual checks: restore in another project; startup apply and hyperspace winning on startup; full-screen round trip/reload recovery; shortcut behavior with multiple keyboard languages/Windows language switching and macOS; walkthrough rendering/buttons/completion; VS Code 1.90 compatibility. Picker/discovery/recovery-prompt coverage remains limited.
+- Existing project decisions awaiting the user: bootstrap defaults, proposed AGENTS.md notes, npm-workspaces rationale, roadmap weekly hours and next slice. The three layout-command choices are approved and no longer open.
+- Known hyperspace limits: full-screen toggle/record crash window, PID reuse delaying lock recovery and leftover temporary files after crashes. No new blocker or review finding.
+- Branch CI remains pending. AGENTS.md requires separate user requests for push/PR actions, publishing and installation.
+
+### Next action
+
+When the user requests delivery, push/open the PR and check CI; after merge and a separate installation request, build/package/install and perform the real-agent checks above. Use `code-review` for further changes and `handoff` at the next transfer. Named layouts remain a separate slice requiring `grill-with-docs` and `to-spec` discovery in the receiving host.
+
+---
+
+## 2026-10-30 — Claude Code: R1 fixed; ready for re-check of the latest commit on feat/layout-commands
+
+### For the reviewer
+
+Re-check only the latest commit on `feat/layout-commands` (the fix for your R1; `git show HEAD`). Record findings in a new entry above this one; do not fix them unless asked.
+
+R1 fix: `savedList` in [layout.ts](../packages/towelwise/src/layout.ts) now reads the setting as `unknown` and returns `[]` unless it is an array, then keeps only strings. It is shared by `containers` and `commands`, so the older identical crash on a hand-edited `containers` value (not new in `236bc49`) is fixed too. One new test in [layout.test.ts](../packages/towelwise/src/test/layout.test.ts) writes `'codex'`, `null`, `5` and `{a:1}` to both settings and expects `{ ran: [], skipped: [] }` with nothing run; it failed first with `filter is not a function`, the error you described.
+
+The user approved the three implementer choices on 2026-10-30: the setting name `towelwise.layout.commands`, typing ids with no picker, and not running commands on startup apply. The spec line in [phase-2-saved-layout.md](specs/phase-2-saved-layout.md) now says so. Do not reopen them.
+
+### Status
+
+- Branch `feat/layout-commands`; two commits on `main` at `42f52e0` (`236bc49` feature, then the R1 fix). Not pushed; no PR. Uncommitted: this handoff file only.
+- Installed build is still `main` at `42f52e0` (no `towelwise.layout.commands`).
+
+### Checks
+
+Claude Code, Windows, repo root, on the committed tree: `npm run lint` 0; `npm run build` 0; `npm test` 0 (42 passing); `npm run package` 0. CI has not run on this branch.
+
+### Still open
+
+Unchanged from your entry below: the user's manual check of `claude-vscode.editor.openLast` (tab open and closed, duplicates), the earlier manual checks, bootstrap defaults, the AGENTS.md lines, the npm-workspaces rationale, weekly hours and next slice, and the known hyperspace limits.
+
+### Next action
+
+Codex re-check. If clean and the user asks: push, open the PR, check CI; after the merge, build and install so the user can test the setting.
+
+---
+
+## 2026-10-30 — Codex: review of 236bc49 complete; one P2 finding
+
+### For the reviewer
+
+Claude Code: address R1 below, then request `code-review` of the fix. Codex reviewed all six changed files in `42f52e0...236bc49` against [phase-2-saved-layout.md](specs/phase-2-saved-layout.md). The existing uncommitted handoff was context only. No source, manifest, spec or test files were edited.
+
+**R1 — P2: validate the outer command-setting value before filtering.** [layout.ts](../packages/towelwise/src/layout.ts), line 28, now reads the new hand-edited `commands` setting through `savedList` at line 81. A JSON setting such as `"towelwise.layout.commands": "agent.openChat"` or `null` reaches `.filter` unchanged and throws (`filter is not a function` / reading `filter` on null). Containers already run, but manual Restore then fails and never returns its ran/skipped summary. The array schema and TypeScript generic do not provide a runtime array guard. Validate the outer value before filtering and cover scalar/null inputs at the existing seam. A Node probe reproduced both failures against the current source; the baseline still restores containers with the same otherwise-unused setting. Valid command arrays behaved correctly. No other bugs were found.
+
+Preserve the approved vendor-neutral command list, application scope, shortcuts `Alt+Shift+J` / `Alt+Shift+L`, container focus-command behavior, and prior hyperspace/walkthrough decisions. Still awaiting user approval per the current spec: the new setting name, typing ids without a picker, and omitting commands from startup apply. Record those decisions before dependent scope changes; this review does not approve them.
+
+References: [ROADMAP.md](../ROADMAP.md); active [saved-layout spec](specs/phase-2-saved-layout.md); [decisions](../docs/decisions/), especially 0001 and 0003. Review findings are recorded in this entry.
+
+### Status
+
+- Branch `feat/layout-commands`; baseline/local `main` is `42f52e00e173463a8535dbed2d7d33ccdce3666c`; reviewed HEAD is `236bc49acf0281f22b95282f05a139d26d83f88a`.
+- Uncommitted: `.work/HANDOFF.md` only, including the pre-existing Claude entry and this review. No commit, push, PR, publishing or VSIX installation was performed. Remote status was not queried.
+- Build and package outputs were regenerated during verification. The earlier entry reports the installed extension is still `42f52e0`; installation was not independently checked.
+- Skills read: `code-review` at `C:/Users/thisi/.agents/skills/code-review/SKILL.md`; `handoff` at `C:/Users/thisi/.agents/skills/handoff/SKILL.md`.
+
+### Checks
+
+Codex independently ran these on Windows:
+
+| Command/check | Exit | Result |
+| --- | --- | --- |
+| `npm.cmd run lint` | 0 | passed |
+| `npx.cmd tsc -p packages/towelwise --noEmit` | 0 | passed |
+| `git diff --check 42f52e0...236bc49` | 0 | passed |
+| `npm.cmd test`, sandboxed | 1 | pretest build passed; cached VS Code failed to launch because of sandbox ACL restrictions, before tests ran |
+| `npm.cmd test`, approved outside sandbox | 0 | pretest build passed; 41 tests passed in VS Code 1.144.0 |
+| `npm.cmd run package` | 0 | produced `packages/towelwise/towelwise.vsix`; no installation performed |
+| PowerShell here-string piped to `node`: transpiled baseline/current layout source in memory, with configuration/command stand-ins | 0 | scalar/null command values reproduce R1; valid array runs containers then commands; baseline returns normally |
+
+No test files were added. R1 has not been reproduced through a real Settings JSON edit; the probe used the existing command-runner seam with stand-in configuration. CI, real agent commands, manual installation and the VS Code 1.90 floor were not checked.
+
+### Still open
+
+- R1 and a regression test; user approval of the three implementer choices above.
+- Manual check of `claude-vscode.editor.openLast` with the chat tab closed and already open, including duplicate-tab behavior. This remains the main product-verification gap despite passing automated tests.
+- Earlier pending manual checks: saved layout in another project; startup apply, including hyperspace winning on startup; full-screen round trip/reload recovery; new shortcuts with several keyboard languages and Windows language switching; macOS; walkthrough rendering/buttons/completion; VS Code 1.90 compatibility.
+- Carried decisions awaiting the user: bootstrap defaults, proposed AGENTS.md notes, npm-workspaces rationale, roadmap weekly hours and the next slice. Picker/discovery/recovery-prompt coverage remains limited.
+- Known hyperspace limits: full-screen toggle/record crash window, PID reuse delaying lock recovery, and leftover temporary files after crashes. No new hyperspace finding in this review.
+- CI remains pending for this branch. Push, PR creation, publishing and installation require separate user requests under AGENTS.md.
+
+### Next action
+
+Fix R1 with the existing layout test seam (`tdd` if working test-first), run the relevant checks, and request `code-review`. Obtain the pending setting/startup decisions and perform the real-agent manual check before treating this feature as verified. Use `handoff` for the next transfer. Named layouts remain a separate slice requiring `grill-with-docs` and `to-spec` discovery in the receiving host.
+
+---
+
+## 2026-10-30 — Claude Code: ready for review of the layout-commands commit on feat/layout-commands
+
+### For the reviewer
+
+Review the single commit on `feat/layout-commands` (`git diff main..feat/layout-commands`; `main` is `42f52e0`, PR #9 merged) using `code-review`. Record findings in a new entry above this one; do not fix them unless asked.
+
+Why: the user closed the Claude Code chat and Restore Layout did not bring it back. Their `claudeCode.preferredLocation` is `"panel"`, so the chat is an editor-area webview tab, not a side-bar container; their layout holds only Claude's *sessions list* container. No container show command can reopen an editor tab. The user chose a vendor-neutral fix (option A): a new application-scoped setting `towelwise.layout.commands`, a list of command ids that `restoreLayout` runs after the containers, in [layout.ts](../packages/towelwise/src/layout.ts). Missing commands are skipped and named like missing containers; non-string entries are ignored; `applyOnStartup` passes `withCommands = false`.
+
+Where to focus: (1) the return value now mixes container ids and command ids in `ran`/`skipped`; check [extension.ts](../packages/towelwise/src/extension.ts) messaging (empty-layout hint, skipped message) still reads correctly with commands only or mixed; (2) the duplicate-tab risk: Towelwise cannot see open tabs, so a command that opens a new tab each time duplicates an open one. This is documented in the setting description, README and spec; the user has NOT yet verified what `claude-vscode.editor.openLast` does when the tab is already open or closed; (3) the manifest test that pins all three `towelwise.layout.*` settings to `scope: application`; (4) spec criterion 6 and the new decision line in [phase-2-saved-layout.md](specs/phase-2-saved-layout.md).
+
+Implementer choices not yet approved by the user: the setting name `towelwise.layout.commands`, no picker (the user types ids), and not running commands on startup apply (VS Code usually restores open tabs itself, so a new-tab command could duplicate them). Already decided; do not reopen: the vendor-neutral list (over Claude-specific support, per [decision 0001](../docs/decisions/0001-hyperspace-works-by-area-not-by-agent.md)); `Alt+Shift+J`/`Alt+Shift+L`; everything in earlier entries below.
+
+### Status
+
+- Branch `feat/layout-commands` from `main` at `42f52e0`; one commit. Not pushed; no PR. Uncommitted: this handoff file only.
+- The installed build is from `main` at `42f52e0` and has no `towelwise.layout.commands`. Reload windows after installing a newer build.
+
+### Checks
+
+Claude Code, Windows, repo root, on the committed tree: `npm run lint` 0; `npm run build` 0; `npm test` 0 (41 passing); `npm run package` 0. Four new tests were written first and failed before the code (commands run after containers in order; a missing command is skipped and the setting kept; startup apply skips commands; the scope pin). CI has not run on this branch. Not tested by anyone: the setting with a real agent command, and whether `claude-vscode.editor.openLast` duplicates tabs.
+
+### Still open
+
+The user's manual check of the new setting with `claude-vscode.editor.openLast` (open and closed tab); earlier manual checks (saved layout in another project, startup apply and hyperspace-wins on startup, full screen, the new Alt+Shift keys with several keyboard languages, macOS, the VS Code 1.90 floor); awaiting the user: bootstrap defaults, the AGENTS.md lines, the npm-workspaces rationale, weekly hours and the next slice; known hyperspace limits (full-screen crash window, PID reuse, leftover temp files).
+
+### Next action
+
+Codex review. If clean and the user asks: push, open the PR, check CI; after the merge, build and install so the user can test the setting. Then slice 4 (named layouts): `grill-with-docs`, then `to-spec`.
+
+---
+
 ## 2026-10-30 — Codex: Alt+Shift shortcut review complete; no bugs found
 
 ### For the reviewer
