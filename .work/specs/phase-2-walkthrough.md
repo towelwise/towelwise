@@ -15,8 +15,8 @@ Towelwise is a productivity and focus tool on top of agents the person has alrea
    1. **Your agents.** Says Towelwise works alongside any AI coding agent. For someone with no agent yet, a button opens the Extensions view so they can choose one themselves.
    2. **Arrange your agents.** Text only: drag each agent's panel to the side you want.
    3. **Choose your layout.** Button runs **Towelwise: Choose Layout**.
-   4. **Bring it back anytime.** Button runs **Towelwise: Restore Layout**, and names its key, `Ctrl+Alt+L`.
-   5. **Jump to hyperspace.** Button runs **Towelwise: Jump to Hyperspace**, and names its key, `Ctrl+Alt+H`.
+   4. **Bring it back anytime.** Button runs **Towelwise: Restore Layout**, and names its key, `Ctrl+K L`.
+   5. **Jump to hyperspace.** Button runs **Towelwise: Jump to Hyperspace**, and names its key, `Ctrl+K H`.
    6. **Make it yours.** Button opens Settings filtered to Towelwise, and mentions full screen, startup apply and what hyperspace hides.
 3. Steps 3 to 5 tick as complete when their command runs. Steps 1, 2 and 6 complete when the person views them.
 4. The walkthrough names no specific agent, recommends none, and never installs anything or runs an agent.
