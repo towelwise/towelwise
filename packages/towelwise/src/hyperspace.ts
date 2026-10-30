@@ -9,6 +9,15 @@ interface Saved {
   value?: unknown;
 }
 
+// fullScreen records that the jump toggled full screen, so restore toggles it back and never otherwise.
+interface Snapshot {
+  settings: Saved[];
+  fullScreen: boolean;
+}
+
+// VS Code only offers a toggle and cannot report the current state, so this is opt-in and assumes the window starts windowed.
+const TOGGLE_FULL_SCREEN = 'workbench.action.toggleFullScreen';
+
 // `option` is the towelwise.hyperspace.* setting that turns each item on or off.
 const CHROME = [
   { option: 'hideActivityBar', key: 'workbench.activityBar.location', hidden: 'hidden' },
@@ -130,10 +139,12 @@ async function jump(storageDir: string): Promise<string[]> {
   const config = vscode.workspace.getConfiguration();
   const options = vscode.workspace.getConfiguration('towelwise.hyperspace');
   const chrome = CHROME.filter((c) => options.get(c.option, true));
-  const snapshot: Saved[] = chrome.map(({ key }) => {
+  const fullScreen = options.get('fullScreen', false);
+  const settings: Saved[] = chrome.map(({ key }) => {
     const value = config.inspect(key)?.globalValue;
     return { key, had: value !== undefined, value };
   });
+  const snapshot: Snapshot = { settings, fullScreen };
 
   // Published first, and atomically, so a crash mid-jump stays recoverable and never leaves a half-written file.
   const file = stateFile(storageDir);
@@ -148,18 +159,22 @@ async function jump(storageDir: string): Promise<string[]> {
       await vscode.commands.executeCommand(command);
     }
   }
+  if (fullScreen) await vscode.commands.executeCommand(TOGGLE_FULL_SCREEN);
   // A fresh read: `config` above is a snapshot taken before the updates.
   const after = vscode.workspace.getConfiguration();
   return chrome.filter(({ key, hidden }) => after.get(key) !== hidden).map(({ key }) => key);
 }
 
-function readSnapshot(file: string): Saved[] {
+function readSnapshot(file: string): Snapshot {
   try {
     const data: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
     const known = (s: Saved) =>
       typeof s?.key === 'string' && typeof s.had === 'boolean' && CHROME.some((c) => c.key === s.key);
-    if (!Array.isArray(data) || !data.every(known)) throw new Error('invalid snapshot');
-    return data;
+    const snapshot = data as Snapshot;
+    if (!Array.isArray(snapshot?.settings) || !snapshot.settings.every(known) || typeof snapshot.fullScreen !== 'boolean') {
+      throw new Error('invalid snapshot');
+    }
+    return snapshot;
   } catch {
     fs.rmSync(file, { force: true });
     throw new Error('Hyperspace state was unreadable, so it was cleared. No settings were restored.');
@@ -168,10 +183,12 @@ function readSnapshot(file: string): Saved[] {
 
 async function restoreSnapshot(storageDir: string): Promise<void> {
   const file = stateFile(storageDir);
-  const saved = readSnapshot(file);
+  const { settings, fullScreen } = readSnapshot(file);
   const config = vscode.workspace.getConfiguration();
-  for (const s of saved) {
+  for (const s of settings) {
     await config.update(s.key, s.had ? s.value : undefined, GLOBAL);
   }
+  // Cleared before the toggle: a failure here leaves a window the user can fix with F11, never a stuck hyperspace.
   fs.rmSync(file);
+  if (fullScreen) await vscode.commands.executeCommand(TOGGLE_FULL_SCREEN);
 }

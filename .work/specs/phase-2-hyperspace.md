@@ -18,7 +18,8 @@ The person has already arranged their agents. Example (the user's own layout): A
 6. Restore does not reopen areas that hyperspace closed; they stay closed until the person reopens them. (VS Code gives extensions no way to read whether an area was open.)
 7. If a workspace or folder setting keeps a chrome item visible, so the user setting cannot hide it, hyperspace still hides everything else and shows one quiet message naming the blocking setting. Towelwise never writes workspace or folder settings.
 8. If VS Code reloads or crashes while in hyperspace, the next window to start shows a quiet offer to restore. Accepting it restores per criterion 5. Nothing restores without the person acting.
-9. Root `npm run lint`, `npm run build`, `npm test` and `npm run package` exit 0, and CI passes on the PR.
+9. An opt-in setting, off by default, also enters true full screen on jump and leaves it on restore. The saved copy records whether the jump toggled full screen, and restore toggles it back only in that case. VS Code can neither report nor set full screen directly, so this assumes the window starts windowed; jumping while already full screen inverts the window mode (settings still restore exactly).
+10. Root `npm run lint`, `npm run build`, `npm test` and `npm run package` exit 0, and CI passes on the PR.
 
 ## Approved decisions (user, 2026-10-29)
 
@@ -40,6 +41,7 @@ Resolving Codex's spec review (findings in `.work/HANDOFF.md`):
 
 Resolving Codex's commit review of `f1c2e50`:
 
+- Added scope (user, 2026-10-29, after trying the installed build): optional true full screen via an opt-in setting, accepting that it assumes a windowed start. Chosen over a separate command and over hiding the custom title bar.
 - Narrowed scope (user, 2026-10-29): the editor area has no hide control and is always kept. No safe way to close it exists, only a toggle that can open it.
 - Overlapping commands are serialized by a cross-window lock; an unreadable saved copy is cleared with an error. Both have regression tests at the same round-trip seam.
 

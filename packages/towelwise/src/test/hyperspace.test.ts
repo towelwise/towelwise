@@ -8,6 +8,7 @@ import { isActive, restore, stateFile, toggle } from '../hyperspace';
 const ACTIVITY_BAR = 'workbench.activityBar.location';
 const STATUS_BAR = 'workbench.statusBar.visible';
 const MENU_BAR = 'window.menuBarVisibility';
+const FULL_SCREEN = 'towelwise.hyperspace.fullScreen';
 const KEYS = [ACTIVITY_BAR, STATUS_BAR, MENU_BAR];
 
 const config = () => vscode.workspace.getConfiguration();
@@ -27,6 +28,7 @@ suite('hyperspace', () => {
       await config().update(k, original[i], vscode.ConfigurationTarget.Global);
     }
     await config().update(STATUS_BAR, undefined, vscode.ConfigurationTarget.Workspace);
+    await config().update(FULL_SCREEN, undefined, vscode.ConfigurationTarget.Global);
     fs.rmSync(storageDir, { recursive: true, force: true });
   });
 
@@ -130,6 +132,20 @@ suite('hyperspace', () => {
     assert.strictEqual(isActive(storageDir), true);
     assert.deepStrictEqual(globalValues(), hidden);
     assert.ok(fs.existsSync(path.join(storageDir, 'hyperspace.lock.other-window')));
+  });
+
+  test('full screen is entered and left only when its setting is on', async () => {
+    const saved = () => JSON.parse(fs.readFileSync(stateFile(storageDir), 'utf8'));
+
+    await toggle(storageDir);
+    assert.strictEqual(saved().fullScreen, false);
+    await toggle(storageDir);
+
+    await config().update(FULL_SCREEN, true, vscode.ConfigurationTarget.Global);
+    await toggle(storageDir);
+    assert.strictEqual(saved().fullScreen, true);
+    await toggle(storageDir);
+    assert.strictEqual(isActive(storageDir), false);
   });
 
   test('an unexpected error reading another lock aborts and leaves no lock of ours behind', async () => {
