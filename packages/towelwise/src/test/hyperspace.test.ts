@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { isActive, stateFile, toggle } from '../hyperspace';
+import { isActive, restore, stateFile, toggle } from '../hyperspace';
 
 const ACTIVITY_BAR = 'workbench.activityBar.location';
 const STATUS_BAR = 'workbench.statusBar.visible';
@@ -92,5 +92,43 @@ suite('hyperspace', () => {
     assert.strictEqual(config().get(ACTIVITY_BAR), 'hidden');
     await toggle(storageDir);
     assert.deepStrictEqual(globalValues(), before);
+  });
+
+  // A pid no process can have, standing in for a window that crashed mid-transition.
+  const DEAD_PID = 0x7ffffffe;
+  const plantLock = (name: string, pid: number) =>
+    fs.writeFileSync(path.join(storageDir, `hyperspace.lock.${name}`), JSON.stringify({ pid, time: Date.now() }));
+
+  test('restore works immediately after a crash left a fresh lock behind', async () => {
+    const before = globalValues();
+    await toggle(storageDir);
+    plantLock('crashed', DEAD_PID);
+
+    assert.strictEqual(await restore(storageDir), true);
+    assert.strictEqual(isActive(storageDir), false);
+    assert.deepStrictEqual(globalValues(), before);
+  });
+
+  test('competing toggles over an abandoned lock run exactly one transition', async () => {
+    const before = globalValues();
+    plantLock('crashed', DEAD_PID);
+
+    await Promise.all([toggle(storageDir), toggle(storageDir)]);
+    assert.strictEqual(isActive(storageDir), true);
+    assert.strictEqual(config().get(ACTIVITY_BAR), 'hidden');
+
+    await toggle(storageDir);
+    assert.deepStrictEqual(globalValues(), before);
+  });
+
+  test('a live owner keeps its lock: restore reports busy and changes nothing', async () => {
+    await toggle(storageDir);
+    const hidden = globalValues();
+    plantLock('other-window', process.ppid);
+
+    assert.strictEqual(await restore(storageDir), false);
+    assert.strictEqual(isActive(storageDir), true);
+    assert.deepStrictEqual(globalValues(), hidden);
+    assert.ok(fs.existsSync(path.join(storageDir, 'hyperspace.lock.other-window')));
   });
 });

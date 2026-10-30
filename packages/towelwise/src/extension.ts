@@ -25,7 +25,13 @@ export function activate(context: vscode.ExtensionContext): void {
   if (isActive(storageDir)) {
     void vscode.window
       .showInformationMessage('Towelwise: hyperspace is still on. Restore your settings?', 'Restore')
-      .then((choice) => (choice === 'Restore' ? restore(storageDir) : undefined))
+      .then(async (choice) => {
+        if (choice === 'Restore' && !(await restore(storageDir))) {
+          void vscode.window.showInformationMessage(
+            'Towelwise: another window is switching hyperspace right now. Run Jump to Hyperspace again in a moment.',
+          );
+        }
+      })
       .then(undefined, showError);
   }
 }
