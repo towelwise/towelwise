@@ -11,10 +11,15 @@ const ON_STARTUP = 'towelwise.layout.applyOnStartup';
 const GLOBAL = vscode.ConfigurationTarget.Global;
 const config = () => vscode.workspace.getConfiguration();
 
-// A stand-in for VS Code: which show commands exist, and a record of the ones that ran.
-const fakeVsCode = (available: string[]) => {
+// A stand-in for VS Code: which show commands exist, each container's first view, and a record of the commands that ran.
+const fakeVsCode = (available: string[], views: Record<string, string> = {}) => {
   const ran: string[] = [];
-  return { ran, available: new Set(available), run: async (command: string) => void ran.push(command) };
+  return {
+    ran,
+    available: new Set(available),
+    views: new Map(Object.entries(views)),
+    run: async (command: string) => void ran.push(command),
+  };
 };
 
 suite('layout', () => {
@@ -26,6 +31,7 @@ suite('layout', () => {
 
   teardown(async () => {
     await config().update(CONTAINERS, undefined, GLOBAL);
+    await config().update(CONTAINERS, undefined, vscode.ConfigurationTarget.Workspace).then(undefined, () => undefined);
     await config().update(ON_STARTUP, undefined, GLOBAL);
     fs.rmSync(storageDir, { recursive: true, force: true });
   });
@@ -36,7 +42,7 @@ suite('layout', () => {
 
     const result = await restoreLayout(vs);
     assert.deepStrictEqual(vs.ran, ['workbench.view.extension.codex', 'workbench.view.extension.antigravity']);
-    assert.deepStrictEqual(result, { shown: ['codex', 'antigravity'], skipped: [] });
+    assert.deepStrictEqual(result, { ran: ['codex', 'antigravity'], skipped: [] });
   });
 
   test('restore skips a container that is not available, reports it, and keeps the layout', async () => {
@@ -45,7 +51,7 @@ suite('layout', () => {
 
     const result = await restoreLayout(vs);
     assert.deepStrictEqual(vs.ran, ['workbench.view.extension.antigravity', 'workbench.view.extension.codex']);
-    assert.deepStrictEqual(result, { shown: ['antigravity', 'codex'], skipped: ['gone'] });
+    assert.deepStrictEqual(result, { ran: ['antigravity', 'codex'], skipped: ['gone'] });
     assert.deepStrictEqual(config().get(CONTAINERS), ['antigravity', 'gone', 'codex']);
   });
 
@@ -57,10 +63,36 @@ suite('layout', () => {
     assert.deepStrictEqual(vs.ran, ['workbench.action.chat.open']);
   });
 
+  test('a container with a known view is shown through the view focus command, which never toggles', async () => {
+    await config().update(CONTAINERS, ['codex', 'plain'], GLOBAL);
+    const vs = fakeVsCode(
+      ['workbench.view.extension.codex', 'codex.view.focus', 'workbench.view.extension.plain'],
+      { codex: 'codex.view' },
+    );
+
+    await restoreLayout(vs);
+    assert.deepStrictEqual(vs.ran, ['codex.view.focus', 'workbench.view.extension.plain']);
+  });
+
+  test('a workspace setting cannot override the saved layout', async () => {
+    await config().update(CONTAINERS, ['codex'], GLOBAL);
+    await config().update(CONTAINERS, [], vscode.ConfigurationTarget.Workspace).then(undefined, () => undefined);
+    const vs = fakeVsCode(['workbench.view.extension.codex']);
+
+    assert.deepStrictEqual((await restoreLayout(vs)).ran, ['codex']);
+  });
+
+  test('a hand-edited layout with a non-string entry is ignored, not fatal', async () => {
+    await config().update(CONTAINERS, [1, 'codex'], GLOBAL);
+    const vs = fakeVsCode(['workbench.view.extension.codex']);
+
+    assert.deepStrictEqual(await restoreLayout(vs), { ran: ['codex'], skipped: [] });
+  });
+
   test('an empty layout runs nothing', async () => {
     const vs = fakeVsCode(['workbench.view.extension.codex']);
 
-    assert.deepStrictEqual(await restoreLayout(vs), { shown: [], skipped: [] });
+    assert.deepStrictEqual(await restoreLayout(vs), { ran: [], skipped: [] });
     assert.deepStrictEqual(vs.ran, []);
   });
 

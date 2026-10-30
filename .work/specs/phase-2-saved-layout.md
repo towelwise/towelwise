@@ -27,6 +27,7 @@ Example (the user's own setup): Antigravity's container in the primary side bar 
 - Apply: a command with a default keybinding, plus an opt-in, off-by-default apply when a window opens.
 - A missing container is skipped and named; the layout is not changed.
 - Hyperspace wins on startup: automatic apply is skipped while hyperspace is on.
+- Review of `9f19831` (user, 2026-10-30): a container is shown through its first view's own focus command (it never toggles, so Restore cannot close an agent moved to the bottom panel), with the container command only as a fallback. VS Code cannot say which of an extension's containers is enabled, so the picker lists all of them with area and id, and restore reports which show commands ran, not what became visible. Both layout settings are application-scoped, so a project cannot override them.
 - Test seam: applying a layout, observed through the same stand-in command runner hyperspace tests use. The picker UI and real side bars are checked by hand.
 
 No new decision record: a declared layout follows directly from [0003](../../docs/decisions/0003-hyperspace-never-reads-or-reopens-layout-state.md).

@@ -24,8 +24,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('towelwise.layout.choose', () => chooseLayout().catch(showError)),
     vscode.commands.registerCommand('towelwise.layout.restore', async () => {
       try {
-        const { shown, skipped } = await restoreLayout(await liveVsCode());
-        if (shown.length + skipped.length === 0) {
+        const { ran, skipped } = await restoreLayout(await liveVsCode());
+        if (ran.length + skipped.length === 0) {
           void vscode.window.showInformationMessage('Towelwise: no layout chosen yet. Run Towelwise: Choose Layout.');
         } else if (skipped.length > 0) {
           void vscode.window.showInformationMessage(`Towelwise: skipped ${skipped.join(', ')}, which is not available.`);

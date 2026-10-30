@@ -105,12 +105,14 @@
               "type": "string"
             },
             "default": [],
-            "markdownDescription": "The agent panels to show when you restore your layout, in order. Set it with **Towelwise: Choose Layout**."
+            "markdownDescription": "The agent panels to show when you restore your layout, in order. Set it with **Towelwise: Choose Layout**.",
+            "scope": "application"
           },
           "towelwise.layout.applyOnStartup": {
             "type": "boolean",
             "default": false,
-            "description": "Also apply your layout when a window opens. Skipped while hyperspace is on."
+            "description": "Also apply your layout when a window opens. Skipped while hyperspace is on.",
+            "scope": "application"
           }
         }
       }
