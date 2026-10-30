@@ -20,6 +20,10 @@ _Avoid_: Column, part, region
 The parts of VS Code that frame the areas without holding agent panels, such as the activity bar, status bar and menu bar.
 _Avoid_: UI, decorations
 
+**Layout**:
+The agent panels a person wants showing in the side areas, the same in every project; applying it brings those panels back into view where they already live.
+_Avoid_: Arrangement, preset, workspace layout
+
 **Hyperspace**:
 A temporary state in which Towelwise hides the chrome and side areas a person chose, always leaving the editor area visible, until they restore.
 _Avoid_: Focus mode, zen mode

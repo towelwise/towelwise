@@ -56,8 +56,9 @@ The guiding rule: **a small, real prototype in weeks, not a finished suite in 20
 The core extension, built in small slices. Each slice ships on its own.
 
 1. **Jump to hyperspace.** One command (or key) hides the chrome and areas you chose, leaving your agents in view; the same command puts your settings back exactly.
-2. **Saved layouts.** Save how your agents are arranged and bring it back with one click, in any project. Reopen a panel that a reload or update lost.
+2. **Saved layout.** Choose the agent panels you want showing and bring them back with one keypress, or automatically when a window opens, in any project. Fixes side bars that come back closed after a reload, an update or a project switch.
 3. **Beginner profile.** A quiet ready-made VS Code profile and a first-run walkthrough. Your normal setup stays untouched.
+4. **Named layouts.** Save several layouts ("three agents", "just Claude") and pick one.
 
 **Done when:** you use it every day on your own three-agent layout and it survives reloads and extension updates.
 

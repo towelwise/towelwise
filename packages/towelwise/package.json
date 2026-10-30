@@ -35,53 +35,87 @@
       {
         "command": "towelwise.hyperspace.toggle",
         "title": "Towelwise: Jump to Hyperspace"
+      },
+      {
+        "command": "towelwise.layout.choose",
+        "title": "Towelwise: Choose Layout"
+      },
+      {
+        "command": "towelwise.layout.restore",
+        "title": "Towelwise: Restore Layout"
       }
     ],
     "keybindings": [
       {
         "command": "towelwise.hyperspace.toggle",
         "key": "ctrl+alt+h"
+      },
+      {
+        "command": "towelwise.layout.restore",
+        "key": "ctrl+alt+l"
       }
     ],
-    "configuration": {
-      "title": "Towelwise: Hyperspace",
-      "properties": {
-        "towelwise.hyperspace.hideActivityBar": {
-          "type": "boolean",
-          "default": true,
-          "description": "Hide the activity bar in hyperspace."
-        },
-        "towelwise.hyperspace.hideStatusBar": {
-          "type": "boolean",
-          "default": true,
-          "description": "Hide the status bar in hyperspace."
-        },
-        "towelwise.hyperspace.hideMenuBar": {
-          "type": "boolean",
-          "default": true,
-          "description": "Hide the menu bar in hyperspace."
-        },
-        "towelwise.hyperspace.hidePrimarySideBar": {
-          "type": "boolean",
-          "default": false,
-          "description": "Close the primary side bar in hyperspace."
-        },
-        "towelwise.hyperspace.hideSecondarySideBar": {
-          "type": "boolean",
-          "default": false,
-          "description": "Close the secondary side bar in hyperspace."
-        },
-        "towelwise.hyperspace.hideBottomPanel": {
-          "type": "boolean",
-          "default": true,
-          "description": "Close the bottom panel in hyperspace."
-        },
-        "towelwise.hyperspace.fullScreen": {
-          "type": "boolean",
-          "default": false,
-          "description": "Also enter true full screen in hyperspace, and leave it on restore. VS Code cannot report whether the window is already full screen, so start from a windowed window."
+    "configuration": [
+      {
+        "title": "Towelwise: Hyperspace",
+        "properties": {
+          "towelwise.hyperspace.hideActivityBar": {
+            "type": "boolean",
+            "default": true,
+            "description": "Hide the activity bar in hyperspace."
+          },
+          "towelwise.hyperspace.hideStatusBar": {
+            "type": "boolean",
+            "default": true,
+            "description": "Hide the status bar in hyperspace."
+          },
+          "towelwise.hyperspace.hideMenuBar": {
+            "type": "boolean",
+            "default": true,
+            "description": "Hide the menu bar in hyperspace."
+          },
+          "towelwise.hyperspace.hidePrimarySideBar": {
+            "type": "boolean",
+            "default": false,
+            "description": "Close the primary side bar in hyperspace."
+          },
+          "towelwise.hyperspace.hideSecondarySideBar": {
+            "type": "boolean",
+            "default": false,
+            "description": "Close the secondary side bar in hyperspace."
+          },
+          "towelwise.hyperspace.hideBottomPanel": {
+            "type": "boolean",
+            "default": true,
+            "description": "Close the bottom panel in hyperspace."
+          },
+          "towelwise.hyperspace.fullScreen": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also enter true full screen in hyperspace, and leave it on restore. VS Code cannot report whether the window is already full screen, so start from a windowed window."
+          }
+        }
+      },
+      {
+        "title": "Towelwise: Layout",
+        "properties": {
+          "towelwise.layout.containers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "markdownDescription": "The agent panels to show when you restore your layout, in order. Set it with **Towelwise: Choose Layout**.",
+            "scope": "application"
+          },
+          "towelwise.layout.applyOnStartup": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also apply your layout when a window opens. Skipped while hyperspace is on.",
+            "scope": "application"
+          }
         }
       }
-    }
+    ]
   }
 }
