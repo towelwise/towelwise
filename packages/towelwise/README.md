@@ -6,9 +6,9 @@ Towelwise helps you focus on the AI coding agents you already use. It only opens
 
 | Command | Default key | What it does |
 | --- | --- | --- |
-| **Towelwise: Jump to Hyperspace** | `Ctrl+K H` | Hides the parts of the window you choose, leaving your agents in view. Run it again to put your settings back exactly. |
+| **Towelwise: Jump to Hyperspace** | `Alt+Shift+J` | Hides the parts of the window you choose, leaving your agents in view. Run it again to put your settings back exactly. |
 | **Towelwise: Choose Layout** | | Pick the agent panels you want showing. |
-| **Towelwise: Restore Layout** | `Ctrl+K L` | Reopens your chosen panels, in any project. |
+| **Towelwise: Restore Layout** | `Alt+Shift+L` | Reopens your chosen panels, in any project. |
 
 New here? Open **Help > Welcome > Get Started with Towelwise**.
 
