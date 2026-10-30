@@ -55,7 +55,7 @@ Decision records: [0001 area, not agent](../../docs/decisions/0001-hyperspace-wo
 
 ## Implementer defaults (approved by the user, 2026-10-30)
 
-- The default key: `Ctrl+Alt+H` when built, changed on 2026-10-30 to the chord `Ctrl+K H` because Ctrl+Alt is AltGr on Windows and can steal typing on some keyboard layouts. Checked against VS Code's default shortcuts and the installed extensions.
+- The default key: `Ctrl+Alt+H` when built, changed on 2026-10-30 to the chord `Ctrl+K H`, then the same day to `Alt+Shift+J` (a single press, free in VS Code's defaults and the installed extensions; `Alt+Shift+H` is Peek Call Hierarchy), because Ctrl+Alt is AltGr on Windows and can steal typing on some keyboard layouts. Checked against VS Code's default shortcuts and the installed extensions.
 - The exact VS Code settings and commands used to hide each chrome item and close each area, as built.
 - Setting names (`towelwise.hyperspace.*`), and the shared saved state, a file in the extension's global storage folder visible to every window.
 

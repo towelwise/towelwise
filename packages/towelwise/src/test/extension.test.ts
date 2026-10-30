@@ -14,10 +14,10 @@ suite('towelwise.towelwise', () => {
   });
 
   // Ctrl+Alt is AltGr on Windows, so Ctrl+Alt+letter steals typing on layouts where AltGr+letter types a character.
-  test('default shortcuts are Ctrl+K chords and nothing mentions Ctrl+Alt', () => {
+  test('default shortcuts are single Alt+Shift presses and nothing mentions Ctrl+Alt', () => {
     const manifest = vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON;
     const keys = Object.fromEntries(manifest.contributes.keybindings.map((k: { command: string; key: string }) => [k.command, k.key]));
-    assert.deepStrictEqual(keys, { 'towelwise.hyperspace.toggle': 'ctrl+k h', 'towelwise.layout.restore': 'ctrl+k l' });
+    assert.deepStrictEqual(keys, { 'towelwise.hyperspace.toggle': 'alt+shift+j', 'towelwise.layout.restore': 'alt+shift+l' });
     assert.ok(!/ctrl\+alt/i.test(JSON.stringify(manifest.contributes)), 'a shortcut or step text still says Ctrl+Alt');
   });
 });

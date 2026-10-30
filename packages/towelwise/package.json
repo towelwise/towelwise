@@ -53,11 +53,11 @@
     "keybindings": [
       {
         "command": "towelwise.hyperspace.toggle",
-        "key": "ctrl+k h"
+        "key": "alt+shift+j"
       },
       {
         "command": "towelwise.layout.restore",
-        "key": "ctrl+k l"
+        "key": "alt+shift+l"
       }
     ],
     "configuration": [
@@ -164,7 +164,7 @@
           {
             "id": "restore",
             "title": "Bring it back anytime",
-            "description": "Reopen your chosen panels after a reload, an update or a new project. Press Ctrl+K then L, or:\n[Restore Layout](command:towelwise.layout.restore)",
+            "description": "Reopen your chosen panels after a reload, an update or a new project. Press Alt+Shift+L, or:\n[Restore Layout](command:towelwise.layout.restore)",
             "media": {
               "markdown": "media/walkthrough.md"
             },
@@ -175,7 +175,7 @@
           {
             "id": "hyperspace",
             "title": "Jump to hyperspace",
-            "description": "Hide everything but your agents, then press it again to put it all back. Press Ctrl+K then H, or:\n[Jump to Hyperspace](command:towelwise.hyperspace.toggle)",
+            "description": "Hide everything but your agents, then press it again to put it all back. Press Alt+Shift+J, or:\n[Jump to Hyperspace](command:towelwise.hyperspace.toggle)",
             "media": {
               "markdown": "media/walkthrough.md"
             },
