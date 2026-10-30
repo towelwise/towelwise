@@ -11,6 +11,7 @@ interface LayoutEnv {
   run(command: string): PromiseLike<unknown>;
   available: ReadonlySet<string>;
   views: ReadonlyMap<string, string>; // container id -> its first view id
+  log(line: string): void;
 }
 
 // A view's own focus command always reveals it. The container command toggles when the container is in the
@@ -56,8 +57,9 @@ export function viewsByContainer(manifests: Manifest[]): Map<string, string> {
   return new Map([...others, ...owned]);
 }
 
-export async function liveVsCode(): Promise<LayoutEnv> {
+export async function liveVsCode(log: (line: string) => void = () => undefined): Promise<LayoutEnv> {
   return {
+    log,
     run: (command) => vscode.commands.executeCommand(command),
     available: new Set(await vscode.commands.getCommands(true)),
     views: viewsByContainer(vscode.extensions.all.map((ext) => ext.packageJSON)),
@@ -72,20 +74,35 @@ export async function liveVsCode(): Promise<LayoutEnv> {
 export async function restoreLayout(vs: LayoutEnv, withCommands = true): Promise<{ ran: string[]; skipped: string[] }> {
   const ran: string[] = [];
   const skipped: string[] = [];
+  vs.log(withCommands ? 'restore layout' : 'restore layout (containers only, on startup)');
+
+  // Everything it runs or skips goes to the log, since VS Code cannot say whether a command had any visible effect.
+  const run = async (command: string, note = '') => {
+    try {
+      await vs.run(command);
+    } catch (e) {
+      vs.log(`FAILED ${command}: ${e instanceof Error ? e.message : String(e)}`);
+      throw e;
+    }
+    vs.log(`ran ${command}${note}`);
+  };
+
   for (const id of savedList('containers')) {
     const command = showCommand(id, vs);
     if (command) {
-      await vs.run(command);
+      await run(command, ` (container ${id})`);
       ran.push(id);
     } else {
+      vs.log(`skipped ${id}: no such command`);
       skipped.push(id);
     }
   }
   for (const command of withCommands ? savedList('commands') : []) {
     if (vs.available.has(command)) {
-      await vs.run(command);
+      await run(command);
       ran.push(command);
     } else {
+      vs.log(`skipped ${command}: no such command`);
       skipped.push(command);
     }
   }

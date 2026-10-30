@@ -7,6 +7,10 @@ const showError = (e: unknown) => void vscode.window.showErrorMessage(e instance
 export function activate(context: vscode.ExtensionContext): void {
   // globalStorage is one folder shared by every window, so hyperspace is a single shared state.
   const storageDir = context.globalStorageUri.fsPath;
+  // A quiet record of what Restore ran, since VS Code cannot say whether a command had any visible effect.
+  const channel = vscode.window.createOutputChannel('Towelwise');
+  const log = (line: string) => channel.appendLine(`${new Date().toISOString()} ${line}`);
+  context.subscriptions.push(channel);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('towelwise.hyperspace.toggle', async () => {
@@ -24,7 +28,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('towelwise.layout.choose', () => chooseLayout().catch(showError)),
     vscode.commands.registerCommand('towelwise.layout.restore', async () => {
       try {
-        const { ran, skipped } = await restoreLayout(await liveVsCode());
+        const { ran, skipped } = await restoreLayout(await liveVsCode(log));
         if (ran.length + skipped.length === 0) {
           void vscode.window.showInformationMessage('Towelwise: no layout chosen yet. Run Towelwise: Choose Layout.');
         } else if (skipped.length > 0) {
@@ -37,7 +41,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Quiet on purpose: a missing agent should not nag on every window open.
-  void applyOnStartup(storageDir, liveVsCode).then(undefined, showError);
+  void applyOnStartup(storageDir, () => liveVsCode(log)).then(undefined, showError);
 
   if (isActive(storageDir)) {
     void vscode.window

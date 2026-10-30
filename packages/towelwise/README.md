@@ -22,6 +22,7 @@ Search for `towelwise` in Settings.
 
 ## Things to know
 
+- **Output > Towelwise** is a quiet log of every command Restore Layout ran, skipped or failed. Check it when a restore does not do what you expect.
 - Hyperspace changes your real user settings and restores them exactly. While it is on, those settings may also sync to your other devices if Settings Sync is on.
 - Panels that hyperspace closes stay closed when you restore. The editor area is never hidden.
 
