@@ -7,5 +7,6 @@ suite('towelwise.towelwise', () => {
     assert.ok(ext, 'extension not found');
     await ext.activate();
     assert.strictEqual(ext.isActive, true);
+    assert.ok((await vscode.commands.getCommands(true)).includes('towelwise.hyperspace.toggle'));
   });
 });

@@ -1,41 +1,55 @@
 # Handoff to Claude Code
 
-Date: 2026-10-29. Prepared by Codex after the bootstrap review.
+Date: 2026-10-29. Updated by Codex after reviewing commit `f929351`.
 
 ## Task and current status
 
-The agreed slice is the local Phase 1 bootstrap: one empty VS Code extension, npm workspaces, lint/build/activation-test/package checks, and a PR workflow file. Implementation is present and Codex found no actionable defects. Verdict: "Looks good. Ship." This verdict covers the local slice; full Phase 1 acceptance remains pending.
+**Update (Claude Code, 2026-10-29):** both `f929351` findings are addressed in the working tree, uncommitted. (1) `lockIsLive()` now treats only a missing file (`ENOENT`) or corrupt content as dead; any other read error aborts acquisition and leaves the other owner's lock in place. (2) `acquire()` removes its own marker if the scan or any later step throws. One regression test plants a directory named like a lock (a real non-`ENOENT` read error); it failed before the fix (leaked marker) and passes now. Lint, build, test (10 passing) and package exit 0. The PID-reuse and `hyperspace.tmp.*` limits are unchanged and still accepted.
 
-No fixes or further implementation were requested. Resume from this review rather than rebuilding the scaffold. No existing handoff was present.
+Codex reviewed `f929351`, which replaces the shared time-based lock with uniquely named PID-owner files, published by rename. Each entrant creates its own marker and backs off if another live marker exists. Startup Restore now reports busy instead of silently succeeding. The earlier `ab59877` findings are addressed in ordinary operation; two filesystem-error paths remain, detailed below. No source changes were made by Codex.
+
+Lint, build, all nine extension tests, and packaging passed. A four-process stress check found no overlapping critical sections in 1,000 attempts. Fault injection confirmed both remaining findings. These checks do not establish live VS Code multi-window/crash behavior.
+
+Claude's next assignment: add targeted regressions for the two error paths, preserve other owners' locks on unexpected read errors, and clean up the entrant's marker if acquisition throws. Keep the current approved scope and avoid introducing a new locking architecture without user agreement.
+
+Preserve the approved scope: settings restore exactly; closed side areas stay closed; the editor area is always kept; workspace overrides hide the rest and produce a message; hyperspace is shared across windows. Commands arriving during an active transition are ignored, but restore after a crash must still work. Reload recovery remains an approved manual check. The spec remains `ready-for-agent`.
 
 ## References
 
 - Instructions: [AGENTS.md](../AGENTS.md) and [CLAUDE.md](../CLAUDE.md).
-- Roadmap: [ROADMAP.md](../ROADMAP.md), Phase 1.
-- Active spec: [phase-1-bootstrap.md](specs/phase-1-bootstrap.md), still marked `ready-for-agent`.
+- Roadmap: [ROADMAP.md](../ROADMAP.md), Phase 2 slice 1. Hyperspace-first order and removal of agent buttons are committed.
+- Active spec: [phase-2-hyperspace.md](specs/phase-2-hyperspace.md). Terms: [GLOSSARY.md](../GLOSSARY.md).
+- Previous spec: [phase-1-bootstrap.md](specs/phase-1-bootstrap.md).
 - Decisions: `docs/decisions/` does not exist yet; approved choices are recorded in the spec. Do not create a decision record without an actual approved trade-off.
-- Prior evidence: [TRIAL.md](TRIAL.md). Its earlier "bootstrap implementation is absent" finding is historical and superseded by the implementation and review below.
-- Current review findings: [this handoff](#review-findings); the review was originally delivered in chat, with no separate findings file.
+- Prior evidence: [TRIAL.md](TRIAL.md); older bootstrap findings and pending checks there are historical.
+- Current review findings: [this handoff](#review-findings). The commit review was originally delivered in chat; no separate findings file or saved reproduction script exists.
 
 ## Git state
 
-- Branch: `chore/bootstrap`.
-- Baseline commit: none; HEAD does not exist. No remote is configured.
-- All project files are untracked, including workflow documents, `.work/`, root npm manifests/lockfile, ESLint configuration, `.github/workflows/ci.yml`, and `packages/towelwise/`.
-- Generated outputs and dependencies are ignored. The scaffold remains uncommitted.
+- Branch: `feat/hyperspace`.
+- Reviewed commit and current HEAD: `f9293517a3b1e739bd7e02474fe2764537ccb875` (`fix: replace time-based hyperspace lock with per-owner pid locks`), on top of `ab59877`. Review range: `f929351^..f929351`.
+- Working tree was clean before and after review, and before this handoff update. This handoff is the only intended uncommitted change.
+- The user reports nothing is pushed; Codex did not push or independently compare remote state.
+- Earlier handoff branch/baseline and untracked-spec claims are obsolete.
 
 ## Review findings
 
-Codex reviewed the untracked source/configuration against the approved spec, including the activation test, package contents, and CI commands. Expected load: one local VS Code user. No must-fix, should-fix, or lean findings were identified. Source/configuration files were not edited during review.
+Scope: the requested fix commit and its connected jump/restore callers, current spec, and tests. The whole-feature range `75a1920..f929351` was not independently re-reviewed in full. Unrelated local changes were excluded; none were present.
 
-Implementer defaults remain flagged for user review, not recorded as approved decisions:
+1. **P2 - A read error can remove another window's live lock** ([hyperspace.ts](../packages/towelwise/src/hyperspace.ts), lines 45-50 and 70-71). `lockIsLive()` converts every read failure to false, so acquisition deletes the marker even when its owner is alive. Injecting one `EIO` read error on a valid live marker caused that marker to be deleted and a new acquisition to succeed. This can admit simultaneous transitions. Abort acquisition on unexpected read errors and preserve the other marker until owner death is confirmed. Distinguish a disappeared file from a read failure.
+2. **P2 - A failed directory scan leaks the entrant's live marker** ([hyperspace.ts](../packages/towelwise/src/hyperspace.ts), lines 64-67 and 82-87). `acquire()` publishes its marker before scanning, but the cleanup in `withLock()` starts only after acquisition returns. If scanning throws, the marker remains; its PID is alive and subsequent commands back off until the process exits or the marker reaches one hour. Injecting one scan error reproduced this despite the next scan succeeding. Clean up the entrant's marker on acquisition errors, while retaining it for a successful transition.
 
-- Package path `packages/towelwise/`.
-- VS Code engine floor `^1.90.0`, with `@types/vscode ~1.90.0`.
-- CI Node 22 on `ubuntu-latest`, using `xvfb-run -a`.
-- Packaging uses `--no-dependencies --allow-missing-repository`; `prepackage` copies the root LICENSE into the extension package.
+Fault reproductions: an inline `node -` script loaded freshly compiled `out/hyperspace.js` into a VM, appending an in-memory export of the existing `acquire` function. It used an in-memory filesystem and the real current PID. For finding 1, seed a fresh valid other-owner marker, throw `EIO` when that marker is read, and assert acquisition is granted and the marker deleted. For finding 2, throw once from `readdirSync` after publishing the own marker; assert acquisition throws, one live marker remains, and the next acquisition returns undefined. No source files or real user settings changed. No reproduction script was saved.
 
-## Verification actually run by Codex
+## Lock safety and known limits
+
+With successful filesystem operations and transitions within the documented age limit, no ordinary create/scan race was found: a successful entrant keeps its marker until completion, so a later entrant sees it and backs off. Two simultaneous entrants may both back off; the user retries. The actual-process check used four Node workers, 250 attempts each, the compiled acquisition function, and an exclusive guard file to detect overlapping critical sections: 76 acquired, 924 busy, zero overlaps. It also seeded a dead-owner marker. Temporary stress-test files were removed; no test source was added.
+
+- PID reuse can make an abandoned marker appear live until the unrelated process exits or the marker reaches one hour. [Node's process API](https://nodejs.org/api/process.html#processkillpid-signal) checks process existence, not creation identity.
+- Crashes between writing and renaming a lock leave small ignored `hyperspace.tmp.*` files. They accumulate and lengthen scans, but do not grant competing locks. Cleanup is currently absent.
+- The one-hour expiry also assumes no live transition lasts that long, as the `shortcut:` comment states. These are recorded limits, not extra blocking findings at expected local usage.
+
+## Verification actually run for this commit
 
 Commands ran from the repo root on Windows, Node 24.18.0 / npm 11.16.0.
 
@@ -43,22 +57,25 @@ Commands ran from the repo root on Windows, Node 24.18.0 / npm 11.16.0.
 | --- | --- | --- |
 | `npm.cmd run lint` | 0 | ESLint passed. |
 | `npm.cmd run build` | 0 | TypeScript compiled. |
-| `npm.cmd test` in sandbox | 1 | Network access failed; cached VS Code then failed during Electron startup because of sandbox permissions. The activation test did not run. |
-| `npm.cmd test` outside sandbox | 0 | One activation test passed on VS Code 1.144.0. |
-| `npm.cmd run package` | 0 | Produced `packages/towelwise/towelwise.vsix`. |
+| `npm.cmd test` outside sandbox | 0 | All nine tests passed on VS Code 1.144.0, including dead-owner recovery, competing toggles, and live-owner busy reporting. |
+| `npm.cmd run package` | 0 | Produced `packages/towelwise/towelwise.vsix`, six entries including compiled extension and hyperspace modules. |
+| Inline `node -` four-process stress check | 0 | 1,000 acquisition attempts; 76 acquired, 924 busy, zero overlapping critical sections. |
+| Inline `node -` fault injection | 0 | Assertions confirmed both filesystem-error findings above. |
+| `git diff --check` / `git status --short` | 0 | No whitespace errors; clean tree after review. |
 
-Plain `npm run lint` and `npm run build` initially exited 1 because PowerShell blocks `npm.ps1`; using `npm.cmd` resolved the launcher issue without changing execution policy. VSIX inspection confirmed five archive entries, compiled `out/extension.js`, and identity `towelwise.towelwise` version `0.0.1`. Git status was unchanged after review.
+Use `npm.cmd` in this PowerShell environment: the earlier bootstrap review found `npm.ps1` blocked by execution policy. That review also found the sandbox blocks Electron startup; the current extension tests ran outside it. Do not confuse those earlier environment failures with current test failures.
 
 Codex did not rerun a clean `npm ci`. Claude's earlier successful install and checks are reported separately in TRIAL.md; they are not fresh Codex verification.
 
 ## Pending work and next action
 
-There is no known code blocker for the local bootstrap slice. The smallest next action is to present the remaining defaults and verification gaps to the user and agree the next bounded slice/action. Do not infer authorization to commit, create a remote, push, change branch protection, publish, install a VSIX into the user's editor, or begin Phase 2.
+Smallest next action: reproduce one unexpected other-marker read failure in a targeted regression, then fix it together with cleanup when acquisition throws. Run the targeted regressions and required lint/build/test/package checks. Preserve the documented PID-reuse/temporary-file limits unless the user requests a scope change. Keep fixes uncommitted for independent review unless the user requests a commit. This handoff does not authorize pushing, publishing, or editor installation.
 
-- GitHub CI execution, including Linux/headless behavior, remains unverified and requires a separate request.
-- Manual VSIX installation remains unverified and requires a separate request.
-- Open VSX namespace verification remains pending per the spec; it does not block this slice.
-- Claude starter-skill discovery/execution evidence remains unestablished in the trial record. Do not equate local skill files with host discovery.
-- TRIAL.md was left unchanged by this review/handoff; current Codex review evidence is recorded here.
+- Current `ROADMAP.md` marks Phase 1 done except `docs/decisions/`. Earlier handoff entries describing bootstrap CI/manual VSIX checks as pending are historical; this review did not independently verify their later completion.
+- Actual two-window operation, reload/crash recovery, optional area controls, manual VSIX installation for this feature, Linux/headless CI, macOS menu-bar behavior, and compatibility at VS Code 1.90 remain unchecked by Codex. Reload recovery is an approved manual check.
+- Open VSX verification was pending in the bootstrap spec; its current status was not rechecked. Claude starter-skill discovery/execution evidence was also unestablished in the older trial record; do not claim completion from file existence.
+- Bootstrap defaults (package path, VS Code floor, CI Node/runner, and packaging approach) were flagged in the previous review, with no user approval captured in this conversation.
+- Keybinding (`ctrl+alt+h`), exact settings/commands, and saved-state storage are implementation defaults flagged by the active spec; no approval beyond that spec was established in this review.
+- TRIAL.md, the spec, and application code were left unchanged. Current review evidence is recorded here.
 
 Suggested skills: `grill-with-docs` for unresolved next-slice choices, `to-spec` before substantial implementation, `diagnosing-bugs` if a real check fails, `code-review` for the next independent review, and `handoff` when transferring work. Discover them in the receiving host; do not assume availability. Use `tdd` for agreed behavior, and smoke checks for scaffolding.

@@ -4,3 +4,4 @@ out/test/**
 tsconfig.json
 .vscode-test.mjs
 .vscode-test/**
+test-workspace/**
