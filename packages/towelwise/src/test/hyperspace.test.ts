@@ -179,16 +179,22 @@ suite('hyperspace', () => {
     assert.deepStrictEqual(globalValues(), before);
   });
 
-  test('a jump that fails before or during the full screen toggle is not toggled back on restore', async () => {
+  test('a jump that fails undoes itself, so the next press jumps and full screen is not toggled back', async () => {
     await enableFullScreen();
     const before = globalValues();
     for (const failOn of ['workbench.action.closePanel', TOGGLE_FULL_SCREEN]) {
-      await assert.rejects(toggle(storageDir, fakeWindow('a', failOn)));
-      assert.strictEqual(savedFullScreen(), false);
+      const failing = fakeWindow('a', failOn);
+      await assert.rejects(toggle(storageDir, failing), /command failed/);
+      assert.strictEqual(isActive(storageDir), false);
+      assert.deepStrictEqual(globalValues(), before);
+      // Only the attempt that failed: the undo never toggles full screen back.
+      assert.strictEqual(failing.ran.filter((c) => c === TOGGLE_FULL_SCREEN).length, failOn === TOGGLE_FULL_SCREEN ? 1 : 0);
 
-      const again = fakeWindow('a');
-      await toggle(storageDir, again);
-      assert.ok(!again.ran.includes(TOGGLE_FULL_SCREEN));
+      const next = fakeWindow('a');
+      await toggle(storageDir, next);
+      assert.strictEqual(isActive(storageDir), true);
+      assert.strictEqual(config().get(ACTIVITY_BAR), 'hidden');
+      await toggle(storageDir, next);
       assert.deepStrictEqual(globalValues(), before);
     }
   });

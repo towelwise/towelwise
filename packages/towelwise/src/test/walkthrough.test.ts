@@ -20,6 +20,11 @@ const walkthroughs = () => extension().packageJSON.contributes.walkthroughs as {
 const steps = () => walkthroughs()[0].steps;
 
 suite('walkthrough', () => {
+  // Commands are registered on activation; do not rely on another test file having activated the extension.
+  suiteSetup(async () => {
+    await extension().activate();
+  });
+
   test('there is one walkthrough with the six steps in order', () => {
     assert.strictEqual(walkthroughs().length, 1);
     assert.deepStrictEqual(

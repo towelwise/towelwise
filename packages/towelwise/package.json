@@ -5,6 +5,11 @@
   "version": "0.0.1",
   "publisher": "towelwise",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/towelwise/towelwise.git",
+    "directory": "packages/towelwise"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -20,7 +25,7 @@
     "pretest": "npm run build",
     "test": "vscode-test",
     "prepackage": "node -e \"require('fs').copyFileSync('../../LICENSE','LICENSE')\"",
-    "package": "vsce package --no-dependencies --allow-missing-repository --out towelwise.vsix"
+    "package": "vsce package --no-dependencies --out towelwise.vsix"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.0",
@@ -48,11 +53,11 @@
     "keybindings": [
       {
         "command": "towelwise.hyperspace.toggle",
-        "key": "ctrl+alt+h"
+        "key": "ctrl+k h"
       },
       {
         "command": "towelwise.layout.restore",
-        "key": "ctrl+alt+l"
+        "key": "ctrl+k l"
       }
     ],
     "configuration": [
@@ -159,7 +164,7 @@
           {
             "id": "restore",
             "title": "Bring it back anytime",
-            "description": "Reopen your chosen panels after a reload, an update or a new project. Press Ctrl+Alt+L, or:\n[Restore Layout](command:towelwise.layout.restore)",
+            "description": "Reopen your chosen panels after a reload, an update or a new project. Press Ctrl+K then L, or:\n[Restore Layout](command:towelwise.layout.restore)",
             "media": {
               "markdown": "media/walkthrough.md"
             },
@@ -170,7 +175,7 @@
           {
             "id": "hyperspace",
             "title": "Jump to hyperspace",
-            "description": "Hide everything but your agents, then press it again to put it all back. Press Ctrl+Alt+H, or:\n[Jump to Hyperspace](command:towelwise.hyperspace.toggle)",
+            "description": "Hide everything but your agents, then press it again to put it all back. Press Ctrl+K then H, or:\n[Jump to Hyperspace](command:towelwise.hyperspace.toggle)",
             "media": {
               "markdown": "media/walkthrough.md"
             },

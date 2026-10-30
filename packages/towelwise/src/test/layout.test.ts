@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { stateFile } from '../hyperspace';
-import { applyOnStartup, restoreLayout, viewsByContainer } from '../layout';
+import { applyOnStartup, orderChoices, restoreLayout, viewsByContainer } from '../layout';
 
 const CONTAINERS = 'towelwise.layout.containers';
 const ON_STARTUP = 'towelwise.layout.applyOnStartup';
@@ -106,6 +106,22 @@ suite('layout', () => {
     assert.deepStrictEqual(await restoreLayout(vs), { ran: ['codex'], skipped: [] });
   });
 
+  test('the picker lists saved containers first, in saved order, then the rest', () => {
+    const found = ['a', 'b', 'c'].map((id) => ({ id, label: id.toUpperCase(), description: 'Side bar' }));
+
+    assert.deepStrictEqual(orderChoices(['c', 'a'], found).map((c) => c.id), ['c', 'a', 'b']);
+    assert.deepStrictEqual(orderChoices([], found).map((c) => c.id), ['a', 'b', 'c']);
+  });
+
+  test('a saved container that is no longer installed stays in the picker, marked, so it can be unticked', () => {
+    const found = [{ id: 'a', label: 'A', description: 'Side bar' }];
+
+    assert.deepStrictEqual(orderChoices(['gone', 'a'], found), [
+      { id: 'gone', label: 'gone', description: 'Not installed' },
+      found[0],
+    ]);
+  });
+
   test('an empty layout runs nothing', async () => {
     const vs = fakeVsCode(['workbench.view.extension.codex']);
 
@@ -117,7 +133,7 @@ suite('layout', () => {
     await config().update(CONTAINERS, ['codex'], GLOBAL);
     const run = async () => {
       const vs = fakeVsCode(['workbench.view.extension.codex']);
-      return { applied: await applyOnStartup(storageDir, vs), ran: vs.ran };
+      return { applied: await applyOnStartup(storageDir, async () => vs), ran: vs.ran };
     };
 
     assert.deepStrictEqual(await run(), { applied: false, ran: [] });
@@ -127,5 +143,13 @@ suite('layout', () => {
 
     fs.writeFileSync(stateFile(storageDir), '[]'); // hyperspace is on
     assert.deepStrictEqual(await run(), { applied: false, ran: [] });
+  });
+
+  test('startup does not build the VS Code environment when apply on startup is off', async () => {
+    let built = 0;
+    const vs = fakeVsCode(['workbench.view.extension.codex']);
+
+    await applyOnStartup(storageDir, async () => (built++, vs));
+    assert.strictEqual(built, 0);
   });
 });
