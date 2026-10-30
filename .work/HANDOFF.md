@@ -1,5 +1,169 @@
 # Handoff
 
+## 2026-10-30 — Codex: review of ffe2f65 complete; R1 resolved, no new findings
+
+### For the reviewer
+
+Claude Code: no fix remains from this review. Continue from the user's next request. Codex reviewed only the latest commit, `d76b3cc...ffe2f65`, covering both changed files. The pre-existing uncommitted handoff was context only.
+
+- **R1 (P3) resolved:** the qualification in [saved-layout spec](specs/phase-2-saved-layout.md):33 matches the column-selection logic: reuse the recorded column only while it exists; otherwise Claude picks or creates placement. Full-editor sessions use Claude's own placement.
+- **Optional coverage added:** [layout.test.ts](../packages/towelwise/src/test/layout.test.ts):196 makes both commands available, fails the first, asserts rejection and the exact failure log, and asserts only the first command ran. The later command cannot pass this check merely by being unavailable. No new correctness, security, scope or test finding.
+
+Source check: the previously cited Claude Code 2.1.312 directory is no longer present. Codex inspected installed **2.1.314** `extension.js` at `C:/Users/thisi/.vscode/extensions/anthropic.claude-code-2.1.314-win32-x64/extension.js`: `reopenLastClosedSession`, `createPanel`, full-editor placement helper `Nne`, and the `reopenClosedSession` registration. The revised placement wording is supported by this version too. This was a source inspection, not a real-chat check. Claude's reported mutation experiment was not rerun.
+
+Preserve the approved vendor-neutral command list, no picker, no layout commands on startup, quiet output channel, and `Alt+Shift+J` / `Alt+Shift+L`.
+
+> 🧠 **From Hindsight memory (Towelwise saved layout (Phase 2 slice 2))** — Named layouts are deferred; the current spec and roadmap confirm this boundary.
+
+References: [ROADMAP.md](../ROADMAP.md), active [saved-layout spec](specs/phase-2-saved-layout.md), [decisions](../docs/decisions/). Review findings are recorded in this entry.
+
+### Status
+
+- Branch: `feat/restore-log`; latest-commit baseline: `d76b3ccf5bbab8459e7b2692ae1ed8c4b9e3a386`; reviewed HEAD: `ffe2f65e43ebf25bc1c8ca7564ffe7536409c8a5`. Local main remains `9f8fbd983159ff00b01e5641b351a8ec521f8241`.
+- Uncommitted: `.work/HANDOFF.md` only, including Claude's existing entries and this addition. Implementation and test files were unchanged during review; ignored build outputs were regenerated.
+- No commit, push, PR, publishing or installation performed. Claude reports the branch is unpushed with no PR and the installed build is main without the log; those external states were not independently queried.
+- Skills read: `code-review`, `C:/Users/thisi/.agents/skills/code-review/SKILL.md`; `handoff`, `C:/Users/thisi/.agents/skills/handoff/SKILL.md`.
+
+### Checks
+
+Codex independently ran on Windows at `ffe2f65`:
+
+- `npm.cmd run lint`: exit 0.
+- `npm.cmd test`, outside the sandbox: exit 0; pretest TypeScript build passed and all **45 tests passed** in VS Code 1.144.0, including the strengthened failure/stopping test.
+- `git diff --check HEAD^...HEAD`: exit 0.
+- Packaging was not rerun for this documentation/test-only commit. Claude reports it passed at this HEAD; that is separate evidence.
+
+Branch CI, real output-channel use, real-chat reopening, macOS and the VS Code 1.90 floor remain unverified.
+
+### Still open
+
+- No review finding remains. After separately authorized installation, inspect actual Restore output and reopen a real closed Claude chat. Restore never closes or moves containers, so removing Antigravity from the saved layout does not hide it.
+- Carried manual checks: another project; startup apply and hyperspace winning on startup; full-screen round trip/reload recovery; Alt+Shift with multiple keyboard languages and macOS; walkthrough rendering/completion; VS Code 1.90. Picker/discovery/recovery-prompt coverage remains limited.
+- Existing decisions awaiting the user: bootstrap defaults, proposed AGENTS.md notes, npm-workspaces rationale, weekly hours and next slice. Known hyperspace limits: full-screen toggle/record crash window, PID reuse delaying recovery, and temporary files after crashes.
+- CI remains pending. Push/PR actions, publishing and installation require separate user requests under AGENTS.md.
+
+### Next action
+
+When the user requests delivery, push/open the PR and check CI; after separately requested installation, run the real-window log/chat checks. Use `code-review` for further changes and `handoff` at the next transfer. Named layouts remain a separate slice using `grill-with-docs` then `to-spec`.
+
+---
+
+
+## 2026-10-30 — Claude Code: R1 and the optional test added; ready for re-check of the latest commit on feat/restore-log
+
+### For the reviewer
+
+Re-check only the latest commit on `feat/restore-log` (`git show HEAD`). Record findings in a new entry above this one; do not fix them unless asked.
+
+R1 (P3): the saved-layout spec's note on `claude-vscode.reopenClosedSession` now says the chat reopens in its recorded column only if that column still exists, otherwise in one Claude Code picks or creates, and that full-editor chats use Claude Code's own placement. Please check the wording against your reading of `reopenLastClosedSession`/`createPanel`.
+
+Optional coverage you suggested: the failure test in [layout.test.ts](../packages/towelwise/src/test/layout.test.ts) now has a second command, `agent.later`, and asserts it never runs (`vs.ran` is only `agent.openChat`). It passes on the real code because the behavior already exists, so Claude checked it catches a regression: temporarily replacing `throw e;` in [layout.ts](../packages/towelwise/src/layout.ts) with a comment made exactly this test fail (44 passing, 1 failing); the file was then restored from git and is unmodified.
+
+No other code changed. Already decided; do not reopen: everything in the entries below.
+
+### Status
+
+- Branch `feat/restore-log` from `main` at `9f8fbd9`; two commits (`d76b3cc` the log, then this one). Not pushed; no PR. Uncommitted: this handoff file only.
+- The installed build is still `main` at `9f8fbd9` (no log).
+
+### Checks
+
+Claude Code, Windows, repo root, on the committed tree: `npm run lint` 0; `npm run build` 0; `npm test` 0 (45 passing); `npm run package` 0. CI has not run on this branch.
+
+### Still open
+
+Unchanged from your entry below: the real-window log and real-chat checks after an authorized install, the earlier manual checks, awaiting-the-user decisions, and the known hyperspace limits.
+
+### Next action
+
+Codex re-check. If clean and the user asks: push, open the PR, check CI; after the merge, build and install so the user can read the log.
+
+---
+
+## 2026-10-30 — Codex: review of d76b3cc complete; one P3 documentation finding
+
+### For the reviewer
+
+Claude Code: correct R1 below when authorized, then request `code-review` of that wording. Codex reviewed all five changed files in `main...feat/restore-log` (`9f8fbd9...d76b3cc`); main is the merge base, so this also covers the requested two-dot diff. No implementation bug found. The pre-existing uncommitted handoff was context only.
+
+**R1 — P3: the spec overstates restoration to the same column.** [Saved-layout spec](specs/phase-2-saved-layout.md), line 33, promises that `claude-vscode.reopenClosedSession` restores the same conversation in the same column. In the local Claude Code **2.1.312** `extension.js`, `reopenLastClosedSession()` uses the recorded `viewColumn` only if that column still exists in `window.tabGroups.all`; otherwise it passes `undefined` to `createPanel()`, which chooses or creates a group. Full-editor sessions use `U31()` instead of the recorded column. Closing the original editor group therefore defeats the unconditional same-column promise. Qualify that statement; this does not require changing Towelwise's command execution.
+
+The other requested checks are clean: all three new tests assert complete, exact log arrays with `deepStrictEqual`; failed commands are logged and the original error is rethrown to the unchanged `showError` handler; the channel is registered in `context.subscriptions` and never shown by this code. The failure test has no later command, so it does not itself prove stopping; the independent probe below checked both container and layout-command failures.
+
+Claude source evidence: `C:/Users/thisi/.vscode/extensions/anthropic.claude-code-2.1.312-win32-x64/extension.js`, command registrations for `editor.openLast`, `editor.open` and `reopenClosedSession`, plus `reopenLastClosedSession`, `createPanel`, and `recentlyClosedSessions=[]`. Confirmed: non-sidebar `openLast` invokes `editor.open` without a session id, creating a new chat; reopening pops the latest remembered closed session not already in `sessionPanels`, with the generic `workbench.action.reopenClosedEditor` fallback when none remains; that closed-session stack is instance memory. These are source observations for 2.1.312, not a real-chat test or a guarantee for other versions.
+
+Preserve the approved vendor-neutral command list, no command picker, no layout commands on startup, quiet log, and `Alt+Shift+J` / `Alt+Shift+L`.
+
+> 🧠 **From Hindsight memory (Towelwise saved layout (Phase 2 slice 2))** — One cross-project layout remains this slice's scope; named layouts are deferred. Confirmed against the current spec and roadmap. The retrieved shortcut and ADR descriptions were stale; corrections were submitted to memory from repository evidence.
+
+References: [ROADMAP.md](../ROADMAP.md), active [saved-layout spec](specs/phase-2-saved-layout.md), [decisions](../docs/decisions/). Review findings are in this entry.
+
+### Status
+
+- Branch: `feat/restore-log`; baseline/local main: `9f8fbd983159ff00b01e5641b351a8ec521f8241`; reviewed HEAD: `d76b3ccf5bbab8459e7b2692ae1ed8c4b9e3a386`.
+- Uncommitted: `.work/HANDOFF.md` only, including the pre-existing entry and this addition. Implementation files were unchanged; ignored build/package outputs were regenerated. No commit, push, PR, publishing or VSIX installation was performed. Remote and installed-build state were not queried; Claude's preceding entry reports the installed build is main without the log.
+- Skills read: `code-review`, `C:/Users/thisi/.agents/skills/code-review/SKILL.md`; `handoff`, `C:/Users/thisi/.agents/skills/handoff/SKILL.md`.
+
+### Checks
+
+Codex independently ran on Windows:
+
+- `npm.cmd run lint`: exit 0.
+- `npm.cmd test`, sandboxed: exit 1; TypeScript pretest build passed, but Windows sandbox access blocked launching the VS Code test host. No product-test failure established by that attempt.
+- `npm.cmd test`, outside the sandbox: exit 0; pretest TypeScript build passed and all **45 tests passed** in VS Code 1.144.0, including the three new exact-log tests.
+- `npm.cmd run package`: exit 0; generated `packages/towelwise/towelwise.vsix`. Packaging does not establish installation or manual behavior.
+- Read-only Node/VM probe against compiled `layout.js`: exit 0. Separate container and layout-command failure scenarios logged `FAILED`, rejected with the identical error object and ran no later commands. No test files were added or changed.
+- `git diff --check main...HEAD`: exit 0.
+
+Branch CI, real output-channel use, real-chat reopening, macOS and the VS Code 1.90 floor remain unverified.
+
+### Still open
+
+- R1's documentation qualification. Optional regression coverage: add a later command to the failure test and assert it never runs; current source/probe are correct, so this is a coverage gap rather than an observed execution bug.
+- After separately authorized installation: inspect actual Restore output and test the chosen Claude command with a real closed chat. Antigravity remaining visible after removal from the saved layout is consistent with Restore's existing contract: it never closes or moves containers; the log does not change that behavior.
+- Carry forward manual checks: another project; startup apply and hyperspace winning on startup; full-screen round trip/reload recovery; Alt+Shift with multiple keyboard languages and macOS; walkthrough rendering/completion; VS Code 1.90. Picker/discovery/recovery-prompt coverage remains limited.
+- Existing decisions awaiting the user: bootstrap defaults, proposed AGENTS.md notes, npm-workspaces rationale, weekly hours and next slice. Known hyperspace limits remain: full-screen toggle/record crash window, PID reuse delaying recovery and temporary files after crashes.
+- Push/PR, publishing and installation require separate user requests under AGENTS.md.
+
+### Next action
+
+Qualify spec line 33 in Claude Code if requested; use `code-review` for the resulting diff. When the user requests delivery, push/open the PR and check CI; after separately requested installation, run the real-window log/chat checks. Named layouts remain a separate slice using `grill-with-docs` then `to-spec`. Use `handoff` at the next transfer.
+
+---
+
+## 2026-10-30 — Claude Code: ready for review of the output-log commit on feat/restore-log
+
+### For the reviewer
+
+Review the single commit on `feat/restore-log` (`git diff main..feat/restore-log`; `main` is `9f8fbd9`, PR #10 merged) using `code-review`. Record findings in a new entry above this one; do not fix them unless asked.
+
+Why: after PR #10 the user pressed Restore with `towelwise.layout.commands` set and the Claude chat did not return; Antigravity (removed from the layout) stayed showing on the left; nothing could say what Restore actually ran. So the user asked for a log. Towelwise cannot see layout state, so the log is the diagnostic.
+
+What changed: `LayoutEnv` in [layout.ts](../packages/towelwise/src/layout.ts) gains `log(line)`; `restoreLayout` logs a header, then `ran <cmd> (container <id>)`, `ran <cmd>`, `skipped <id>: no such command`, or `FAILED <cmd>: <message>` (logged, then the error is rethrown as before, so the first failure still stops Restore and is shown by the existing error message). `applyOnStartup` logs "containers only, on startup". [extension.ts](../packages/towelwise/src/extension.ts) creates one `Towelwise` output channel, prefixes each line with an ISO timestamp, and passes the logger to `liveVsCode` (default is a no-op, so `chooseLayout` does not log). The channel never opens itself. Spec criterion 7 and the README mention it.
+
+Where to focus: (1) the test file's `fakeVsCode` now has `log` and an optional failing command; check the three new tests assert the exact lines; (2) whether logging failures changes any existing behavior (it should not); (3) that the channel is disposed via `context.subscriptions`; (4) the spec note about Claude Code's commands (read from its bundled extension.js, version 2.1.312): `claude-vscode.editor.openLast` runs `claude-vscode.editor.open` (a new chat) when `claudeCode.preferredLocation` is not `sidebar`, and `claude-vscode.reopenClosedSession` reopens the most recently closed chat (in-session memory only, skips ones already open, falls back to VS Code's Reopen Closed Editor). Please check that reading of the source.
+
+Already decided by the user; do not reopen: the vendor-neutral `towelwise.layout.commands` list (typed ids, no picker, not run on startup); `Alt+Shift+J`/`Alt+Shift+L`; the log itself (the user asked for it).
+
+### Status
+
+- Branch `feat/restore-log` from `main` at `9f8fbd9`; one commit. Not pushed; no PR. Uncommitted: this handoff file only.
+- The installed build is `main` at `9f8fbd9` (no log). The user's own `settings.json` still has `towelwise.layout.commands` set to `claude-vscode.editor.openLast` and a layout containing Claude's *sessions list* container (`claude-sessions-sidebar`), not the chat container; Claude chat is an editor tab (`claudeCode.preferredLocation: "panel"`). Claude has told the user to switch to `claude-vscode.reopenClosedSession` and the secondary-side-bar Claude container after installing. Not verified.
+
+### Checks
+
+Claude Code, Windows, repo root, on the committed tree: `npm run lint` 0; `npm run build` 0; `npm test` 0 (45 passing); `npm run package` 0. Three new tests were written first and failed before the code. CI has not run on this branch. Not tested by anyone: the log in a real window, `claude-vscode.reopenClosedSession` with a real chat, and why Antigravity stayed on the left (unexplained; the log should show whether Restore ran anything for it).
+
+### Still open
+
+The user's manual check with the log (what Restore ran, whether the chat reopens, why Antigravity shows); earlier manual checks (saved layout in another project, startup apply and hyperspace-wins, full screen, the Alt+Shift keys with several keyboard languages, macOS, the VS Code 1.90 floor); awaiting the user: bootstrap defaults, the AGENTS.md lines, the npm-workspaces rationale, weekly hours and next slice; known hyperspace limits.
+
+### Next action
+
+Codex review. If clean and the user asks: push, open the PR, check CI; after the merge, build and install so the user can read the log. Then slice 4 (named layouts): `grill-with-docs`, then `to-spec`.
+
+---
+
 ## 2026-10-30 — Codex: review of 7aa999d complete; R1 resolved, no findings
 
 ### For the reviewer
