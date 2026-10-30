@@ -152,6 +152,17 @@ suite('layout', () => {
     assert.deepStrictEqual(vs.ran, ['workbench.view.extension.codex']);
   });
 
+  test('a layout setting hand-edited to something that is not a list is treated as empty, not fatal', async () => {
+    const vs = fakeVsCode(['workbench.view.extension.codex', 'agent.openChat']);
+
+    for (const wrong of ['codex', null, 5, { a: 1 }]) {
+      await config().update(CONTAINERS, wrong, GLOBAL);
+      await config().update(COMMANDS, wrong, GLOBAL);
+      assert.deepStrictEqual(await restoreLayout(vs), { ran: [], skipped: [] }, JSON.stringify(wrong));
+    }
+    assert.deepStrictEqual(vs.ran, []);
+  });
+
   test('an empty layout runs nothing', async () => {
     const vs = fakeVsCode(['workbench.view.extension.codex']);
 

@@ -24,8 +24,11 @@ function showCommand(id: string, vs: LayoutEnv): string | undefined {
 }
 
 const layoutConfig = () => vscode.workspace.getConfiguration('towelwise.layout');
-// A hand-edited setting may hold anything; only strings can be ids.
-const savedList = (key: string) => layoutConfig().get<unknown[]>(key, []).filter((id): id is string => typeof id === 'string');
+// A hand-edited setting may hold anything: a non-list counts as empty, and only strings in a list can be ids.
+const savedList = (key: string): string[] => {
+  const value = layoutConfig().get<unknown>(key);
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+};
 
 interface Manifest {
   contributes?: {
