@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { toggle } from '../hyperspace';
+import { isActive, stateFile, toggle } from '../hyperspace';
 
 const ACTIVITY_BAR = 'workbench.activityBar.location';
 const STATUS_BAR = 'workbench.statusBar.visible';
@@ -67,5 +67,30 @@ suite('hyperspace', () => {
     await toggle(storageDir);
     assert.deepStrictEqual(globalValues(), before);
     assert.strictEqual(config().inspect(STATUS_BAR)?.workspaceValue, true);
+  });
+
+  test('a toggle that overlaps a jump is ignored, so the snapshot survives', async () => {
+    const before = globalValues();
+
+    await Promise.all([toggle(storageDir), toggle(storageDir)]);
+    assert.strictEqual(isActive(storageDir), true);
+    assert.strictEqual(config().get(ACTIVITY_BAR), 'hidden');
+
+    await toggle(storageDir);
+    assert.strictEqual(isActive(storageDir), false);
+    assert.deepStrictEqual(globalValues(), before);
+  });
+
+  test('an unreadable state file is cleared with an explanation, not left stuck', async () => {
+    const before = globalValues();
+    fs.writeFileSync(stateFile(storageDir), '');
+
+    await assert.rejects(toggle(storageDir), /unreadable/);
+    assert.strictEqual(isActive(storageDir), false);
+
+    await toggle(storageDir);
+    assert.strictEqual(config().get(ACTIVITY_BAR), 'hidden');
+    await toggle(storageDir);
+    assert.deepStrictEqual(globalValues(), before);
   });
 });

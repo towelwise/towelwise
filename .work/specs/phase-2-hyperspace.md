@@ -11,10 +11,10 @@ The person has already arranged their agents. Example (the user's own layout): A
 ## Acceptance criteria
 
 1. A command **Towelwise: Jump to Hyperspace** exists in the Command Palette and has a default keybinding. Hyperspace is one shared state across all VS Code windows: running the command in any window while hyperspace is off jumps; running it in any window while hyperspace is on restores.
-2. In hyperspace, every chrome item marked "hide" is hidden, and every area marked "hide" is closed in the window that jumped. Areas marked "keep" are left as they were: hyperspace never opens a kept area that was closed and never moves or closes agent panels.
-3. Defaults: keep primary side bar, editor area and secondary side bar; hide activity bar, status bar, menu bar and bottom panel.
-4. Each area and chrome item has an on/off setting in a "Towelwise: Hyperspace" settings group. Changing them changes what the next jump hides.
-5. On the first jump, Towelwise saves the previous user-settings value of every setting it will change, including "not set", exactly once. While hyperspace is on, that saved copy is never overwritten, from any window. After restore, each of those settings matches its saved value exactly (an unset setting is unset again, not written as its default).
+2. In hyperspace, every chrome item marked "hide" is hidden, and every hideable area marked "hide" (primary side bar, secondary side bar, bottom panel) is closed in the window that jumped. The editor area is always kept, because VS Code only offers a blind toggle for it. Areas marked "keep" are left as they were: hyperspace never opens a kept area that was closed and never moves or closes agent panels.
+3. Defaults: keep primary side bar and secondary side bar; hide activity bar, status bar, menu bar and bottom panel. The editor area is always kept.
+4. Each chrome item and each hideable area has an on/off setting in a "Towelwise: Hyperspace" settings group. Changing them changes what the next jump hides.
+5. On the first jump, Towelwise saves the previous user-settings value of every setting it will change, including "not set", exactly once. While hyperspace is on, that saved copy is never overwritten, from any window. A jump or restore runs one at a time across all windows: a command that arrives while another is in progress is ignored. The saved copy is published atomically, and a saved copy that cannot be read is cleared with an explanatory error instead of blocking later toggles. After restore, each of those settings matches its saved value exactly (an unset setting is unset again, not written as its default).
 6. Restore does not reopen areas that hyperspace closed; they stay closed until the person reopens them. (VS Code gives extensions no way to read whether an area was open.)
 7. If a workspace or folder setting keeps a chrome item visible, so the user setting cannot hide it, hyperspace still hides everything else and shows one quiet message naming the blocking setting. Towelwise never writes workspace or folder settings.
 8. If VS Code reloads or crashes while in hyperspace, the next window to start shows a quiet offer to restore. Accepting it restores per criterion 5. Nothing restores without the person acting.
@@ -38,6 +38,11 @@ Resolving Codex's spec review (findings in `.work/HANDOFF.md`):
 - Multiple windows: one shared hyperspace; the first jump's saved values cannot be overwritten; any window's command restores.
 - Test seam: the approved round trip, extended with set, unset and workspace-override cases. Recovery after reload stays manual.
 
+Resolving Codex's commit review of `f1c2e50`:
+
+- Narrowed scope (user, 2026-10-29): the editor area has no hide control and is always kept. No safe way to close it exists, only a toggle that can open it.
+- Overlapping commands are serialized by a cross-window lock; an unreadable saved copy is cleared with an error. Both have regression tests at the same round-trip seam.
+
 No decision records yet. The area-based model and the user-settings scope are candidates for the first records in `docs/decisions/`; the user has not yet asked for them.
 
 ## Verification
@@ -56,6 +61,7 @@ No decision records yet. The area-based model and the user-settings scope are ca
 
 - Agent buttons, an agent list, detecting or recognising agents.
 - Reopening areas on restore.
+- Hiding the editor area.
 - Guided first-run setup (beginner-profile slice).
 - Saved layouts (slice 2) and reopening lost panels.
 - Reserving a place for the Probability Drive (Phase 4).

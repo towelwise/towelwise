@@ -21,7 +21,7 @@ The parts of VS Code that frame the areas without holding agent panels, such as 
 _Avoid_: UI, decorations
 
 **Hyperspace**:
-A temporary state in which Towelwise hides the chrome and areas a person chose, leaving only their chosen areas visible until they restore.
+A temporary state in which Towelwise hides the chrome and side areas a person chose, always leaving the editor area visible, until they restore.
 _Avoid_: Focus mode, zen mode
 
 **Restore**:
