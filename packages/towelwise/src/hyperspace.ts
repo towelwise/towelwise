@@ -43,11 +43,19 @@ function processAlive(pid: number): boolean {
 }
 
 function lockIsLive(file: string): boolean {
+  let text: string;
   try {
-    const { pid, time } = JSON.parse(fs.readFileSync(file, 'utf8'));
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    // Gone already is fine. Any other read error says nothing about the owner, so never treat it as dead.
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw e;
+  }
+  try {
+    const { pid, time } = JSON.parse(text);
     return processAlive(pid) && Date.now() - time < MAX_LOCK_AGE_MS;
   } catch {
-    return false;
+    return false; // Corrupt content: locks are published by rename, so this is never a half-written live lock.
   }
 }
 
@@ -63,18 +71,21 @@ function acquire(storageDir: string): string | undefined {
   fs.writeFileSync(tmp, JSON.stringify({ pid: process.pid, time: Date.now() }));
   fs.renameSync(tmp, own);
 
-  let busy = false;
-  for (const name of fs.readdirSync(storageDir)) {
-    const other = path.join(storageDir, name);
-    if (!LOCK_NAME.test(name) || other === own) continue;
-    if (lockIsLive(other)) busy = true;
-    else fs.rmSync(other, { force: true });
-  }
-  if (busy) {
+  try {
+    let busy = false;
+    for (const name of fs.readdirSync(storageDir)) {
+      const other = path.join(storageDir, name);
+      if (!LOCK_NAME.test(name) || other === own) continue;
+      if (lockIsLive(other)) busy = true;
+      else fs.rmSync(other, { force: true });
+    }
+    if (!busy) return own;
+  } catch (e) {
     fs.rmSync(own, { force: true });
-    return undefined;
+    throw e;
   }
-  return own;
+  fs.rmSync(own, { force: true });
+  return undefined;
 }
 
 // One jump or restore at a time across all windows. A command that arrives mid-transition is ignored.

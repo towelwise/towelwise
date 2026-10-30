@@ -131,4 +131,15 @@ suite('hyperspace', () => {
     assert.deepStrictEqual(globalValues(), hidden);
     assert.ok(fs.existsSync(path.join(storageDir, 'hyperspace.lock.other-window')));
   });
+
+  test('an unexpected error reading another lock aborts and leaves no lock of ours behind', async () => {
+    const before = globalValues();
+    // A directory cannot be read as a file: a real read error that is not "file missing".
+    fs.mkdirSync(path.join(storageDir, 'hyperspace.lock.unreadable'));
+
+    await assert.rejects(toggle(storageDir));
+    assert.deepStrictEqual(fs.readdirSync(storageDir), ['hyperspace.lock.unreadable']);
+    assert.strictEqual(isActive(storageDir), false);
+    assert.deepStrictEqual(globalValues(), before);
+  });
 });
