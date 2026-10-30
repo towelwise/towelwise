@@ -1,5 +1,84 @@
 # Handoff
 
+## 2026-10-30 — Codex: Alt+Shift shortcut review complete; no bugs found
+
+### For the reviewer
+
+Codex reviewed `main...feat/alt-shift-shortcuts` (`fb2c469...0974408`) using `code-review` at `C:/Users/thisi/.agents/skills/code-review/SKILL.md`. All six changed files were reviewed; the uncommitted handoff was read as context. No bugs or new review findings. No implementation or test files were edited.
+
+The old chords remain in the historical notes of the hyperspace and saved-layout specs, as well as older handoff entries. Current bindings, README and walkthrough agree. Static checks found no conflict for either new key in VS Code 1.144.0's bundle or 107 built-in/installed extension manifests. This was static inspection, not a live keybinding-resolver or keyboard-input test.
+
+No further code review is pending for this commit. The next assistant should act on the user's next request. Preserve the approved single-press defaults, `Alt+Shift+J` (hyperspace) and `Alt+Shift+L` (restore layout), walkthrough defaults/shared media, failed-jump rollback, always-kept editor area, areas staying closed on restore, window-specific full-screen restoration, and reporting commands run rather than visibility.
+
+References: [ROADMAP.md](../ROADMAP.md); specs [hyperspace](specs/phase-2-hyperspace.md), [saved layout](specs/phase-2-saved-layout.md), [walkthrough](specs/phase-2-walkthrough.md); [decisions](../docs/decisions/). Review outcome is recorded above.
+
+### Status
+
+- Branch `feat/alt-shift-shortcuts`; local `main`/review baseline `fb2c4697f353a229bf09697443d8def80c4d7eaa`; HEAD `0974408c05e87228ca16345878900e83fbb97bcb`. Refs were checked locally; no fetch was performed.
+- Uncommitted: `.work/HANDOFF.md` only, including this entry. No commit was made. Claude reports the branch is unpushed with no PR; remote status was not queried.
+- Per Claude, the installed build is `fb2c469` with the old chords. Installation was not independently verified. Reload windows after any separately authorized VSIX installation.
+- Handoff skill: `C:/Users/thisi/.agents/skills/handoff/SKILL.md`.
+
+### Checks
+
+Codex independently ran these on Windows during the review:
+
+| Command/check | Exit | Result |
+| --- | --- | --- |
+| `npm.cmd run lint` | 0 | passed |
+| `npx.cmd tsc -p packages/towelwise --noEmit` | 0 | typecheck passed |
+| `git diff --check main...HEAD` | 0 | passed |
+| In-memory Node execution of the changed manifest test | 0 | one test passed; supplied the current manifest through a stand-in VS Code API, without launching an extension host |
+| Node/Acorn scan of the installed VS Code 1.144.0 workbench bundle | 0 | no new-key conflict found in static primary/secondary/platform entries; also inspected numeric occurrences and known Alt+Shift+F/H controls |
+| Node scan of 107 extension manifests | 0 | no new-key or chord-prefix conflict across `key`, `win`, `linux`, `mac`; modifier order normalized and `when` clauses retained |
+| `git grep` for old Ctrl+K forms on the reviewed ref | 0 | only historical spec notes and handoff entries |
+
+Codex did not rerun the full extension-host suite, emitting build or packaging. Claude separately reports lint/build/test/package passed, with 37 tests. CI and real-window keypress behavior were not verified.
+
+### Still open
+
+- Manual checks: new keys in a real editor, multiple keyboard languages/Windows language switching, macOS text input, walkthrough rendering/buttons/completion, saved layout in another project, startup apply including hyperspace-wins, full-screen round trip and reload recovery. The VS Code 1.90 floor remains unchecked.
+- Carried decisions awaiting the user: bootstrap defaults (package path, VS Code floor, CI Node/OS), proposed AGENTS.md notes, npm-workspaces ADR rationale, roadmap weekly hours and next slice. An optional walkthrough step for custom shortcuts was offered, not requested.
+- Known hyperspace limits: full-screen toggle/record crash window (F11 recovery), PID reuse delaying lock recovery up to one hour, and temporary files left after crashes. Picker/discovery/recovery-prompt coverage remains limited beyond ordering tests.
+- Push, PR creation, publishing and VSIX installation each require a separate user request. No new blocker was found by this review.
+
+### Next action
+
+When requested, push this branch, open the PR and check CI. After a merge and a separate installation request, build/package/install and reload windows for manual shortcut checks. Named layouts (slice 4) needs its own `grill-with-docs` session and `to-spec`; discover those skills in the receiving host. Use `code-review` for further changes, `diagnosing-bugs` for failures, and `handoff` for the next transfer.
+
+---
+
+## 2026-10-30 — Claude Code: ready for review of the Alt+Shift shortcut commit on feat/alt-shift-shortcuts
+
+### For the reviewer
+
+Review the single commit on `feat/alt-shift-shortcuts` (`git diff main..feat/alt-shift-shortcuts`; `main` is `fb2c469`, PR #8 merged) using `code-review`. Record findings in a new entry above this one; do not fix them unless asked.
+
+What changed: the default shortcuts move from the two-press chords `Ctrl+K H` / `Ctrl+K L` to single presses, `Alt+Shift+J` (Jump to Hyperspace) and `Alt+Shift+L` (Restore Layout), in [package.json](../packages/towelwise/package.json), the walkthrough text, the [README](../packages/towelwise/README.md), the three specs and the keybinding test in [extension.test.ts](../packages/towelwise/src/test/extension.test.ts). No source code changed.
+
+Where to focus: (1) whether any other mention of the old chords remains (Claude grepped; only older handoff entries keep them); (2) the claim that these keys are free. Claude searched VS Code 1.144.0's bundled default keybindings for `primary:<code>` (Alt+Shift+letter = 1567 + letter index; method sanity-checked against known Alt+Shift+F and Alt+Shift+Up) and the keybindings of installed and built-in extensions. Free letters included J and L; **H is taken (Peek Call Hierarchy)**, which is why hyperspace uses J. The search was a text match on the minified bundle, not a keybinding API: please try to find a conflict it missed (secondary bindings, platform-specific bindings, `when`-scoped ones).
+
+Already decided by the user; do not reopen: single-press keys (the user disliked two-step chords); `Alt+Shift+J` and `Alt+Shift+L` as the defaults; plus everything listed in the earlier entries below (walkthrough defaults, failed-jump rollback, always-kept editor area, full screen opt-in, and so on).
+
+### Status
+
+- Branch `feat/alt-shift-shortcuts` from `main` at `fb2c469`; one commit. Not pushed; no PR. Uncommitted: this handoff file only.
+- The installed build is from `main` at `fb2c469`, so its shortcuts are still the `Ctrl+K` chords. Reload windows after installing a newer build.
+
+### Checks
+
+Claude Code, Windows, repo root, on the committed tree: `npm run lint` 0; `npm run build` 0; `npm test` 0 (37 passing); `npm run package` 0. The keybinding test was changed first and failed before the manifest change. CI has not run on this branch. Not tested by anyone: the new keys pressed in a real editor, behaviour with several keyboard languages installed (Windows can treat Alt+Shift alone as a language switch), and any Mac, where Option+Shift+letter types symbols.
+
+### Still open
+
+Manual checks the user has not done (saved layout in another project, startup apply, hyperspace-wins on startup, full screen), macOS and the VS Code 1.90 floor; awaiting the user: bootstrap defaults, the AGENTS.md lines, the npm-workspaces rationale, weekly hours and the next slice; known hyperspace limits (full-screen crash window, PID reuse, leftover temp files). An optional walkthrough step for setting your own shortcuts was offered and not requested.
+
+### Next action
+
+Codex review. If clean and the user asks: push, open the PR, check CI; after the merge, build and install so the user can try the keys. Then slice 4 (named layouts): `grill-with-docs`, then `to-spec`.
+
+---
+
 ## 2026-10-30 — Claude Code: startup race fixed; PR opened for feat/walkthrough
 
 ### For the reviewer
