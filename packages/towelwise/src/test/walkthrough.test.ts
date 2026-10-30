@@ -37,17 +37,36 @@ suite('walkthrough', () => {
     }
   });
 
-  test('steps 3 to 5 complete when their command runs; any other event is a step selection', async () => {
-    const commands = new Set(await vscode.commands.getCommands(true));
-    const byId = new Map(steps().map((s) => [s.id, s]));
-    assert.deepStrictEqual(byId.get('choose')?.completionEvents, ['onCommand:towelwise.layout.choose']);
-    assert.deepStrictEqual(byId.get('restore')?.completionEvents, ['onCommand:towelwise.layout.restore']);
-    assert.deepStrictEqual(byId.get('hyperspace')?.completionEvents, ['onCommand:towelwise.hyperspace.toggle']);
+  // The spec's steps: the one button each runs (with its arguments, if any) and how each completes.
+  const SELECTED = ['onStepSelected'];
+  const EXPECTED: { id: string; buttons: string[]; events: string[] }[] = [
+    { id: 'agents', buttons: ['workbench.view.extensions'], events: SELECTED },
+    { id: 'arrange', buttons: [], events: SELECTED },
+    { id: 'choose', buttons: ['towelwise.layout.choose'], events: ['onCommand:towelwise.layout.choose'] },
+    { id: 'restore', buttons: ['towelwise.layout.restore'], events: ['onCommand:towelwise.layout.restore'] },
+    { id: 'hyperspace', buttons: ['towelwise.hyperspace.toggle'], events: ['onCommand:towelwise.hyperspace.toggle'] },
+    { id: 'settings', buttons: ['workbench.action.openSettings?%5B%22towelwise%22%5D'], events: SELECTED },
+  ];
 
-    for (const step of steps()) {
-      for (const event of step.completionEvents ?? []) {
-        if (event === 'onStepSelected') continue;
-        assert.ok(event.startsWith('onCommand:') && commands.has(event.slice('onCommand:'.length)), `${step.id}: ${event}`);
+  test('each step has exactly its expected buttons', () => {
+    for (const { id, buttons } of EXPECTED) {
+      const step = steps().find((s) => s.id === id);
+      assert.ok(step, `${id} is missing`);
+      assert.deepStrictEqual([...step.description.matchAll(/\(command:([^)\s]+)\)/g)].map((m) => m[1]), buttons, id);
+    }
+  });
+
+  test('each step completes on exactly its expected events', () => {
+    for (const { id, events } of EXPECTED) {
+      assert.deepStrictEqual(steps().find((s) => s.id === id)?.completionEvents, events, id);
+    }
+  });
+
+  test('every command event names a registered command', async () => {
+    const commands = new Set(await vscode.commands.getCommands(true));
+    for (const { id, events } of EXPECTED) {
+      for (const event of events.filter((e) => e.startsWith('onCommand:'))) {
+        assert.ok(commands.has(event.slice('onCommand:'.length)), `${id}: ${event}`);
       }
     }
   });

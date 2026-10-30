@@ -38,7 +38,7 @@ No decision record: deferring the profile is easy to reverse. This also answers 
 - **Smoke checks:** lint, build and package exit 0 locally and in CI on the PR; the VSIX contains any new files.
 - **Manual (wording and appearance are not automated):** install the VSIX, reload, open **Help > Welcome > Get Started with Towelwise**, read all six steps, click each button, and confirm steps 3 to 5 tick when run.
 
-## Implementer defaults (not approved; flag in review)
+## Implementer defaults (approved by the user, 2026-10-30, as written in `e7cccfc`)
 
 - The walkthrough id, title and step wording.
 - Whether steps use plain text or images. Built as plain text, but VS Code requires every step to have `media`, so all six steps share one short markdown file, `packages/towelwise/media/walkthrough.md` (not "no new files" as first assumed).
