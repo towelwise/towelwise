@@ -45,7 +45,7 @@ Resolving Codex's commit review of `f1c2e50`:
 - Narrowed scope (user, 2026-10-29): the editor area has no hide control and is always kept. No safe way to close it exists, only a toggle that can open it.
 - Overlapping commands are serialized by a cross-window lock; an unreadable saved copy is cleared with an error. Both have regression tests at the same round-trip seam.
 
-No decision records yet. The area-based model and the user-settings scope are candidates for the first records in `docs/decisions/`; the user has not yet asked for them.
+Decision records: [0001 area, not agent](../../docs/decisions/0001-hyperspace-works-by-area-not-by-agent.md), [0002 user settings, exact restore](../../docs/decisions/0002-hyperspace-writes-user-settings-and-restores-exactly.md), [0003 no layout reads or reopening](../../docs/decisions/0003-hyperspace-never-reads-or-reopens-layout-state.md).
 
 ## Verification
 
@@ -53,11 +53,11 @@ No decision records yet. The area-based model and the user-settings scope are ca
 - **Smoke checks:** lint, build and package exit 0 locally and in CI on the PR.
 - **Manual:** after installing the VSIX, jump with the user's real three-agent layout; jump from one window and restore from a second; reload VS Code while in hyperspace, accept the restore offer, and confirm settings are back and the bottom panel stays closed.
 
-## Implementer defaults (not approved; flag in review)
+## Implementer defaults (approved by the user, 2026-10-30)
 
-- The default key combination, checked against VS Code's and the installed agents' existing bindings.
-- The exact VS Code settings and commands used to hide each chrome item and close each area.
-- Setting names, and where the shared saved state is stored (it must be visible to every window).
+- The default key combination: `Ctrl+Alt+H`, checked against the installed agents' existing bindings.
+- The exact VS Code settings and commands used to hide each chrome item and close each area, as built.
+- Setting names (`towelwise.hyperspace.*`), and the shared saved state, a file in the extension's global storage folder visible to every window.
 
 ## Out of scope
 

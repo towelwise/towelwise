@@ -14,7 +14,7 @@ This is the working roadmap: the order things get built, and what "done" means f
 | Phase | What | Status |
 |---|---|---|
 | 0 | Claim the names | Done |
-| 1 | Set up the workshop | Done, except `docs/decisions/` |
+| 1 | Set up the workshop | Done |
 | 2 | First prototype: **Towelwise** (hyperspace, layouts, beginner profile) | Next |
 | 3 | The memory experiment (Hindsight on Windows) | Can run alongside Phase 2 |
 | 4 | **Towelwise Recall**: approval inbox, then the Probability Drive | — |
@@ -44,7 +44,7 @@ The guiding rule: **a small, real prototype in weeks, not a finished suite in 20
 - [x] Apache 2.0 `LICENSE` and `NOTICE`, README, `CONTRIBUTING.md`, code of conduct, issue and PR templates
 - [x] Protected `main`: changes only through pull requests, checks must pass
 - [x] CI on every pull request: lint, tests, and package a `.vsix` to prove it builds
-- [ ] `docs/decisions/` for short decision records (one page each: the choice, why, what was ruled out)
+- [x] `docs/decisions/` for short decision records (one page each: the choice, why, what was ruled out)
 - [x] `CLAUDE.md` / `AGENTS.md` in the repo so every agent follows the same house rules
 
 **Done when:** an empty extension builds in CI and installs from the packaged `.vsix`.
