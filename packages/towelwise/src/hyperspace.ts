@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { withLock } from './lock';
 
 interface Saved {
   key: string;
@@ -44,79 +45,9 @@ const AREAS = [
 ];
 
 const GLOBAL = vscode.ConfigurationTarget.Global;
-// shortcut: a lock this old is treated as abandoned even if its pid is alive (pid reuse after a crash); raise it if a transition can run longer.
-const MAX_LOCK_AGE_MS = 60 * 60 * 1000;
-const LOCK_NAME = /^hyperspace\.lock\.[\w-]+$/;
-
 export const stateFile = (storageDir: string) => path.join(storageDir, 'hyperspace.json');
 
 export const isActive = (storageDir: string) => fs.existsSync(stateFile(storageDir));
-
-function processAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'EPERM';
-  }
-}
-
-function lockIsLive(file: string): boolean {
-  let text: string;
-  try {
-    text = fs.readFileSync(file, 'utf8');
-  } catch (e) {
-    // Gone already is fine. Any other read error says nothing about the owner, so never treat it as dead.
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw e;
-  }
-  try {
-    const { pid, time } = JSON.parse(text);
-    return processAlive(pid) && Date.now() - time < MAX_LOCK_AGE_MS;
-  } catch {
-    return false; // Corrupt content: locks are published by rename, so this is never a half-written live lock.
-  }
-}
-
-// Every window locks with its own uniquely named file and only ever deletes that one, so a window can never remove
-// another owner's lock. Having created ours, we back off if any other live lock exists; two racing windows may
-// both back off, but never both proceed. Locks of dead owners are cleaned up here.
-function acquire(storageDir: string): string | undefined {
-  fs.mkdirSync(storageDir, { recursive: true });
-  const id = randomUUID();
-  const own = path.join(storageDir, `hyperspace.lock.${id}`);
-  const tmp = path.join(storageDir, `hyperspace.tmp.${id}`);
-  // Renamed into place so no other window ever reads a half-written lock.
-  fs.writeFileSync(tmp, JSON.stringify({ pid: process.pid, time: Date.now() }));
-  fs.renameSync(tmp, own);
-
-  try {
-    let busy = false;
-    for (const name of fs.readdirSync(storageDir)) {
-      const other = path.join(storageDir, name);
-      if (!LOCK_NAME.test(name) || other === own) continue;
-      if (lockIsLive(other)) busy = true;
-      else fs.rmSync(other, { force: true });
-    }
-    if (!busy) return own;
-  } catch (e) {
-    fs.rmSync(own, { force: true });
-    throw e;
-  }
-  fs.rmSync(own, { force: true });
-  return undefined;
-}
-
-// One jump or restore at a time across all windows. A command that arrives mid-transition is ignored.
-async function withLock<T>(storageDir: string, fn: () => Promise<T>, busy: T): Promise<T> {
-  const own = acquire(storageDir);
-  if (!own) return busy;
-  try {
-    return await fn();
-  } finally {
-    fs.rmSync(own, { force: true });
-  }
-}
 
 /** Jumps or restores. Returns the settings a workspace override kept from being hidden. */
 export function toggle(storageDir: string, host = DEFAULT_HOST): Promise<string[]> {
@@ -127,7 +58,14 @@ export function toggle(storageDir: string, host = DEFAULT_HOST): Promise<string[
         await restoreSnapshot(storageDir, host);
         return [];
       }
-      return jump(storageDir, host);
+      try {
+        return await jump(storageDir, host);
+      } catch (e) {
+        // Undo the partial jump, so the next press jumps instead of "restoring" nothing. If the undo fails too,
+        // the saved copy stays and a later restore can retry; the original error is the one to report.
+        await restoreSnapshot(storageDir, host).catch(() => undefined);
+        throw e;
+      }
     },
     [],
   );
@@ -155,7 +93,7 @@ function publish(storageDir: string, snapshot: Snapshot): void {
 async function jump(storageDir: string, host: Host): Promise<string[]> {
   const config = vscode.workspace.getConfiguration();
   const options = vscode.workspace.getConfiguration('towelwise.hyperspace');
-  const chrome = CHROME.filter((c) => options.get(c.option, true));
+  const chrome = CHROME.filter((c) => options.get<boolean>(c.option));
   const settings: Saved[] = chrome.map(({ key }) => {
     const value = config.inspect(key)?.globalValue;
     return { key, had: value !== undefined, value };
@@ -169,11 +107,11 @@ async function jump(storageDir: string, host: Host): Promise<string[]> {
     await config.update(key, hidden, GLOBAL);
   }
   for (const { option, command } of AREAS) {
-    if (options.get(option, option === 'hideBottomPanel')) {
+    if (options.get<boolean>(option)) {
       await host.run(command);
     }
   }
-  if (options.get('fullScreen', false)) {
+  if (options.get<boolean>('fullScreen')) {
     await host.run(TOGGLE_FULL_SCREEN);
     // Recorded only once the toggle succeeded, so restore never toggles a window that did not enter full screen.
     publish(storageDir, { ...snapshot, fullScreen: true });

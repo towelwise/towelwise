@@ -37,7 +37,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Quiet on purpose: a missing agent should not nag on every window open.
-  void liveVsCode().then((vs) => applyOnStartup(storageDir, vs)).then(undefined, showError);
+  void applyOnStartup(storageDir, liveVsCode).then(undefined, showError);
 
   if (isActive(storageDir)) {
     void vscode.window

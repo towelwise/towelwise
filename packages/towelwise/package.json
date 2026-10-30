@@ -5,6 +5,11 @@
   "version": "0.0.1",
   "publisher": "towelwise",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/towelwise/towelwise.git",
+    "directory": "packages/towelwise"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -20,7 +25,7 @@
     "pretest": "npm run build",
     "test": "vscode-test",
     "prepackage": "node -e \"require('fs').copyFileSync('../../LICENSE','LICENSE')\"",
-    "package": "vsce package --no-dependencies --allow-missing-repository --out towelwise.vsix"
+    "package": "vsce package --no-dependencies --out towelwise.vsix"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.0",
@@ -48,11 +53,11 @@
     "keybindings": [
       {
         "command": "towelwise.hyperspace.toggle",
-        "key": "ctrl+alt+h"
+        "key": "ctrl+k h"
       },
       {
         "command": "towelwise.layout.restore",
-        "key": "ctrl+alt+l"
+        "key": "ctrl+k l"
       }
     ],
     "configuration": [
@@ -115,6 +120,81 @@
             "scope": "application"
           }
         }
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "towelwise.gettingStarted",
+        "title": "Get Started with Towelwise",
+        "description": "Arrange your agents, choose a layout, and try hyperspace.",
+        "steps": [
+          {
+            "id": "agents",
+            "title": "Your agents",
+            "description": "Towelwise works alongside any AI coding agent you already use.\nNo agent yet? [Open Extensions](command:workbench.view.extensions) to choose one yourself.",
+            "media": {
+              "markdown": "media/walkthrough.md"
+            },
+            "completionEvents": [
+              "onStepSelected"
+            ]
+          },
+          {
+            "id": "arrange",
+            "title": "Arrange your agents",
+            "description": "Drag each agent's panel to the side you want it on. Towelwise brings panels back; it does not move them.",
+            "media": {
+              "markdown": "media/walkthrough.md"
+            },
+            "completionEvents": [
+              "onStepSelected"
+            ]
+          },
+          {
+            "id": "choose",
+            "title": "Choose your layout",
+            "description": "Pick the agent panels you want showing.\n[Choose Layout](command:towelwise.layout.choose)",
+            "media": {
+              "markdown": "media/walkthrough.md"
+            },
+            "completionEvents": [
+              "onCommand:towelwise.layout.choose"
+            ]
+          },
+          {
+            "id": "restore",
+            "title": "Bring it back anytime",
+            "description": "Reopen your chosen panels after a reload, an update or a new project. Press Ctrl+K then L, or:\n[Restore Layout](command:towelwise.layout.restore)",
+            "media": {
+              "markdown": "media/walkthrough.md"
+            },
+            "completionEvents": [
+              "onCommand:towelwise.layout.restore"
+            ]
+          },
+          {
+            "id": "hyperspace",
+            "title": "Jump to hyperspace",
+            "description": "Hide everything but your agents, then press it again to put it all back. Press Ctrl+K then H, or:\n[Jump to Hyperspace](command:towelwise.hyperspace.toggle)",
+            "media": {
+              "markdown": "media/walkthrough.md"
+            },
+            "completionEvents": [
+              "onCommand:towelwise.hyperspace.toggle"
+            ]
+          },
+          {
+            "id": "settings",
+            "title": "Make it yours",
+            "description": "Choose what hyperspace hides, turn on full screen, or apply your layout when a window opens.\n[Open Towelwise settings](command:workbench.action.openSettings?%5B%22towelwise%22%5D)",
+            "media": {
+              "markdown": "media/walkthrough.md"
+            },
+            "completionEvents": [
+              "onStepSelected"
+            ]
+          }
+        ]
       }
     ]
   }

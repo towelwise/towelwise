@@ -81,13 +81,17 @@ export async function restoreLayout(vs: LayoutEnv): Promise<{ ran: string[]; ski
 }
 
 /** Applies the layout when a window opens, if the person opted in and hyperspace is not on. */
-export async function applyOnStartup(storageDir: string, vs: LayoutEnv): Promise<boolean> {
+export async function applyOnStartup(storageDir: string, env: () => Promise<LayoutEnv>): Promise<boolean> {
+  // The environment is built only when needed: it reads every command and extension manifest, on every window open.
   if (!layoutConfig().get('applyOnStartup', false) || isActive(storageDir)) return false;
+  const vs = await env();
+  // Another window may have started hyperspace while the environment loaded.
+  if (isActive(storageDir)) return false;
   await restoreLayout(vs);
   return true;
 }
 
-interface Choice {
+export interface Choice {
   id: string;
   label: string;
   description: string;
@@ -115,15 +119,19 @@ function discoverContainers(vs: LayoutEnv): Choice[] {
   return found;
 }
 
+// Saved containers first, in saved order, so a layout keeps its order; ones no longer installed stay so they can be unticked.
+export function orderChoices(saved: string[], found: Choice[]): Choice[] {
+  return [
+    ...saved.map((id) => found.find((c) => c.id === id) ?? { id, label: id, description: 'Not installed' }),
+    ...found.filter((c) => !saved.includes(c.id)),
+  ];
+}
+
 /** Lets the person pick the containers for the layout. Resolves false if they cancel. */
 export async function chooseLayout(): Promise<boolean> {
   const saved = savedContainers();
   const found = discoverContainers(await liveVsCode());
-  // Saved containers first, in saved order, so a layout keeps its order; ones no longer installed stay so they can be unticked.
-  const choices: Choice[] = [
-    ...saved.map((id) => found.find((c) => c.id === id) ?? { id, label: id, description: 'Not installed' }),
-    ...found.filter((c) => !saved.includes(c.id)),
-  ];
+  const choices = orderChoices(saved, found);
   const picked = await vscode.window.showQuickPick(
     choices.map((c) => ({ ...c, picked: saved.includes(c.id) })),
     { canPickMany: true, title: 'Towelwise: Choose Layout', placeHolder: 'Pick the agent panels to show when you restore your layout' },

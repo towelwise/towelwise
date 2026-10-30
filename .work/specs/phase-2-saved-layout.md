@@ -40,7 +40,7 @@ No new decision record: a declared layout follows directly from [0003](../../doc
 
 ## Implementer defaults (approved by the user, 2026-10-30, after trying the installed build)
 
-- The default key: `Ctrl+Alt+L`, checked against the installed agents' bindings.
+- The default key: `Ctrl+Alt+L` when built, changed on 2026-10-30 to the chord `Ctrl+K L` for the same AltGr reason as hyperspace. Checked against VS Code's default shortcuts and the installed extensions.
 - Setting names: `towelwise.layout.containers` (an ordered list of container ids) and `towelwise.layout.applyOnStartup`, both application-scoped.
 - The picker lists the side-bar and secondary-side-bar containers that installed extensions contribute, plus built-in Chat, each labelled with its title, area and id. It does not list bottom-panel containers.
 - "Not available" means no show command exists for the container in VS Code.
