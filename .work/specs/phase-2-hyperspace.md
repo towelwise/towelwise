@@ -18,7 +18,8 @@ The person has already arranged their agents. Example (the user's own layout): A
 6. Restore does not reopen areas that hyperspace closed; they stay closed until the person reopens them. (VS Code gives extensions no way to read whether an area was open.)
 7. If a workspace or folder setting keeps a chrome item visible, so the user setting cannot hide it, hyperspace still hides everything else and shows one quiet message naming the blocking setting. Towelwise never writes workspace or folder settings.
 8. If VS Code reloads or crashes while in hyperspace, the next window to start shows a quiet offer to restore. Accepting it restores per criterion 5. Nothing restores without the person acting.
-9. Root `npm run lint`, `npm run build`, `npm test` and `npm run package` exit 0, and CI passes on the PR.
+9. An opt-in setting, off by default, also enters true full screen on jump and leaves it on restore. The saved copy records, only after the toggle succeeded, whether the jump toggled full screen and in which window (an id new on every start). Restore toggles it back only in that same window; restoring from another window, or after a reload, restores settings, leaves full screen alone, and says to press F11 in the window that jumped. A saved copy from the previous version (a bare list of settings) is still restored. VS Code can neither report nor set full screen directly, so this assumes the window starts windowed; jumping while already full screen inverts the window mode (settings still restore exactly).
+10. Root `npm run lint`, `npm run build`, `npm test` and `npm run package` exit 0, and CI passes on the PR.
 
 ## Approved decisions (user, 2026-10-29)
 
@@ -40,10 +41,11 @@ Resolving Codex's spec review (findings in `.work/HANDOFF.md`):
 
 Resolving Codex's commit review of `f1c2e50`:
 
+- Added scope (user, 2026-10-29, after trying the installed build): optional true full screen via an opt-in setting, accepting that it assumes a windowed start. Chosen over a separate command and over hiding the custom title bar. Cross-window rule (user, 2026-10-30, after Codex's review of `0a2b6a2`): only the window that jumped toggles full screen back; other windows, and the same window after a reload, leave it alone with a message.
 - Narrowed scope (user, 2026-10-29): the editor area has no hide control and is always kept. No safe way to close it exists, only a toggle that can open it.
 - Overlapping commands are serialized by a cross-window lock; an unreadable saved copy is cleared with an error. Both have regression tests at the same round-trip seam.
 
-No decision records yet. The area-based model and the user-settings scope are candidates for the first records in `docs/decisions/`; the user has not yet asked for them.
+Decision records: [0001 area, not agent](../../docs/decisions/0001-hyperspace-works-by-area-not-by-agent.md), [0002 user settings, exact restore](../../docs/decisions/0002-hyperspace-writes-user-settings-and-restores-exactly.md), [0003 no layout reads or reopening](../../docs/decisions/0003-hyperspace-never-reads-or-reopens-layout-state.md).
 
 ## Verification
 
@@ -51,11 +53,11 @@ No decision records yet. The area-based model and the user-settings scope are ca
 - **Smoke checks:** lint, build and package exit 0 locally and in CI on the PR.
 - **Manual:** after installing the VSIX, jump with the user's real three-agent layout; jump from one window and restore from a second; reload VS Code while in hyperspace, accept the restore offer, and confirm settings are back and the bottom panel stays closed.
 
-## Implementer defaults (not approved; flag in review)
+## Implementer defaults (approved by the user, 2026-10-30)
 
-- The default key combination, checked against VS Code's and the installed agents' existing bindings.
-- The exact VS Code settings and commands used to hide each chrome item and close each area.
-- Setting names, and where the shared saved state is stored (it must be visible to every window).
+- The default key combination: `Ctrl+Alt+H`, checked against the installed agents' existing bindings.
+- The exact VS Code settings and commands used to hide each chrome item and close each area, as built.
+- Setting names (`towelwise.hyperspace.*`), and the shared saved state, a file in the extension's global storage folder visible to every window.
 
 ## Out of scope
 
