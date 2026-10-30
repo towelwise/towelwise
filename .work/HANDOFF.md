@@ -1,77 +1,79 @@
 # Handoff
 
-Date: 2026-10-30. Updated by Codex after re-reviewing Phase 2 slice 2 (saved layout), commit `3b0b96e`.
+Date: 2026-10-30. Updated by Codex after independently reviewing the latest saved-layout fix and rerunning local checks. Handoff skill: `C:/Users/thisi/.agents/skills/handoff/SKILL.md`.
 
 ## Task and current status
 
-**Update (Claude Code, 2026-10-30):** the `3b0b96e` discovery finding is addressed in a new commit. `viewsByContainer` (exported from layout.ts, called by `liveVsCode`) prefers the first view from the extension that declares the container and falls back to another extension's view only if the owner contributes none. Two tests with fake manifests cover both load orders and the fallback. Lint, build, test (25 passing) and package exit 0. The VSIX was then built from the committed state and installed into the user's VS Code at the user's request; windows must be reloaded. Manual checks are the user's next step.
+Phase 2 slice 2 (**saved layout**) is implemented on `feat/saved-layout`. Codex reviewed `9f19831` (three P2 findings), then `3b0b96e` (one P2 finding: a later extension overwrote a container's first view). Claude fixed every finding. **Codex reviewed the last fix (`43b2972`), the docs commit (`e436389`), and the uncommitted handoff update: no findings.** The user approved the saved-layout implementer defaults and confirmed the main manual checks by hand (below). The branch is ready to push and open as a PR when the user requests it; CI and the remaining manual checks are pending.
 
-Phase 2 slice 2 (**saved layout**) is implemented in `9f19831`, with review fixes committed as `3b0b96e`. Codex re-reviewed both the fixes (`git show 3b0b96e`) and the full slice (`f039d80...3b0b96e`) against the updated spec. One P2 finding remains below: manifest discovery lets a later extension overwrite a container's first-view mapping. No implementation files were edited during either review.
+Phase 2 slice 1 (hyperspace, with opt-in full screen) is merged to `main` (PRs #5, #6).
 
-The earlier workspace-override finding is fixed by application scope. The generated view-focus command avoids toggling; the container-command fallback is explicitly approved in the spec. Listing all containers with area/id and returning `{ ran, skipped }` is also now approved, so do not reopen the earlier inactive-container-listing finding. Non-string entries in the layout array are ignored and tested. The remaining implementer defaults and manual checks are still pending.
-
-Per the implementer's earlier handoff, the branch is not pushed and has no PR; Codex took no remote actions. Phase 2 slice 1 (hyperspace, with opt-in full screen) is merged to `main` (PRs #5 and #6), with no open code-review findings from those rounds.
-
-Next assistant's assignment: when the user requests a fix, address the remaining discovery finding and add a regression covering multiple extensions contributing to one container. Preserve the updated approved decisions; resolve any ownership-rule ambiguity with the user before dependent implementation. Repeat the relevant checks and obtain an independent review. This handoff does not authorize implementation changes. Manual checks below still need the user.
+Next assistant's assignment: continue from the completed review below. If the user requests pushing/opening a PR, use this branch and check CI. Otherwise help complete the remaining manual checks when requested. No implementation fix is outstanding.
 
 ## References
 
 - Instructions: [AGENTS.md](../AGENTS.md), [CLAUDE.md](../CLAUDE.md).
-- Roadmap: [ROADMAP.md](../ROADMAP.md), Phase 2 (slice 2 reworded to "Saved layout"; "Named layouts" added as slice 4).
-- Active spec: [phase-2-saved-layout.md](specs/phase-2-saved-layout.md), `Status: ready-for-agent`. Its "Approved decisions" section now records the review resolutions; the remaining "Implementer defaults" are not approved.
-- Terms: [GLOSSARY.md](../GLOSSARY.md) (new term: Layout).
+- Roadmap: [ROADMAP.md](../ROADMAP.md), Phase 2 (slice 2 "Saved layout"; slice 4 "Named layouts" is a later slice).
+- Active spec: [phase-2-saved-layout.md](specs/phase-2-saved-layout.md), `Status: ready-for-agent`. Its implementer defaults are now approved, and it records the manual results so far.
+- Terms: [GLOSSARY.md](../GLOSSARY.md) (Layout, Agent panel, Area, Chrome, Hyperspace, Restore).
 - Decisions: [0001](../docs/decisions/0001-hyperspace-works-by-area-not-by-agent.md), [0002](../docs/decisions/0002-hyperspace-writes-user-settings-and-restores-exactly.md), [0003](../docs/decisions/0003-hyperspace-never-reads-or-reopens-layout-state.md). Saved layout follows from 0003 (declared, not captured); no new record.
 - Previous spec (merged): [phase-2-hyperspace.md](specs/phase-2-hyperspace.md).
-- Review findings: [Open review findings](#open-review-findings) below. Earlier hyperspace findings are all resolved; see `git log` for the fix commits.
+- Review findings: [Review outcome](#review-outcome) below. Earlier findings are addressed; see the fix commit messages. No findings are currently open.
 
 ## Git state
 
-- Branch: `feat/saved-layout`. Baseline: `main` at `f039d80` (`feat: add opt-in full screen to hyperspace, plus decision records (#6)`).
-- HEAD: `3b0b96e` (`fix: make saved layout safe against overrides and panel toggling`), parent `9f19831`. Branch, HEAD, parent and baseline were checked by Codex; remote status is carried from the implementer's handoff.
-- Working tree was clean before this update; uncommitted work is now this handoff file only.
+- Branch: `feat/saved-layout`. Slice baseline: `f039d80` (`feat: add opt-in full screen to hyperspace, plus decision records (#6)`), the parent of `9f19831`. Local `main` is still at `75a1920`; use the explicit slice baseline for comparisons. No remote refresh was performed.
+- Commits on the branch: `9f19831` (feature), `3b0b96e` (fixes for review round 1), `43b2972` (owner-first view mapping, fix for review round 2), `e436389` (docs: approved defaults and manual results). HEAD is `e436389`.
+- Previous handoff reports not pushed, no PR, and an existing `origin`; remote status was not independently queried. Uncommitted: this handoff file only. Branch, HEAD and slice baseline were verified locally.
 
-## What was built (see the code, not repeated here)
+## What the slice does (see the code and spec; not repeated here)
 
-[layout.ts](../packages/towelwise/src/layout.ts): `restoreLayout`, `applyOnStartup`, `chooseLayout`, `liveVsCode`. Wiring in [extension.ts](../packages/towelwise/src/extension.ts); commands, `Ctrl+Alt+L` and the `towelwise.layout.*` settings in [package.json](../packages/towelwise/package.json). Tests in [layout.test.ts](../packages/towelwise/src/test/layout.test.ts) use a stand-in for VS Code (the approved seam); the activation test checks all three commands are registered.
+[layout.ts](../packages/towelwise/src/layout.ts): `restoreLayout`, `applyOnStartup`, `chooseLayout`, `liveVsCode`, `viewsByContainer`. Wiring in [extension.ts](../packages/towelwise/src/extension.ts); commands, `Ctrl+Alt+L` and the `towelwise.layout.*` settings in [package.json](../packages/towelwise/package.json). Tests: [layout.test.ts](../packages/towelwise/src/test/layout.test.ts) (stand-in VS Code, the approved seam) and the activation test.
 
-## Open review findings
+## Review outcome
 
-1. **P2 - Later extensions overwrite a container's intended first view.** [layout.ts](../packages/towelwise/src/layout.ts):35 unconditionally sets the container-to-view map while iterating every extension's contributions. If the owner contributes `owner.view` to `agent`, then an add-on contributes `addon.view` to that same container with a false `addon.enabled` condition, discovery replaces the owner mapping with `addon.view`. Its focus command still exists, so restore runs it; VS Code does not open inactive views, leaving the intended agent closed. This differs from the accepted limitation about listing inactive containers: a working container's mapping is replaced by another extension's contribution. No fix has been requested yet.
+Codex used `code-review` at `C:/Users/thisi/.agents/skills/code-review/SKILL.md`. Reviewed `3b0b96e..e436389`, the uncommitted handoff update, and connected layout implementation, tests, activation wiring and manifest against the active spec. This was a focused follow-up, not a fresh review of every line in the full slice.
 
-Evidence: a Node VM probe loaded the compiled `layout.js` with two stand-in extension manifests and the real `liveVsCode`/`restoreLayout` code. Output: `{"ownerFirstView":"owner.view","discoveredView":"addon.view","commandsRun":["addon.view.focus"]}`. This reproduces incorrect command selection, not a manual UI run. The inactive-view no-op and non-toggling focus semantics were inspected in cached VS Code 1.144.0 and [upstream source](https://github.com/microsoft/vscode/blob/main/src/vs/workbench/services/views/browser/viewsService.ts#L268). No fixes or regression tests were added during review.
+No bugs or other review findings. The owner-first mapping follows the approved rule; regression tests cover both extension orders and fallback when the owner contributes no view. Implementation files were left unchanged.
 
 ## Verification actually run
 
-Codex independently reran the following on Windows from the repo root while re-reviewing `3b0b96e`, using `code-review` at `C:/Users/thisi/.agents/skills/code-review/SKILL.md`:
+Codex, Windows, repo root, at `e436389`, 2026-10-30:
 
 | Command | Exit | Result |
 | --- | --- | --- |
 | `npm.cmd run lint` | 0 | passed |
 | `npm.cmd run build` | 0 | compiled |
-| `npm.cmd test` (outside sandbox) | 0 | 23 passing on VS Code 1.144.0 |
-| `npm.cmd run package` | 0 | produced `packages/towelwise/towelwise.vsix`; not installed |
-| `git diff --check f039d80...3b0b96e` | 0 | no whitespace errors |
-| PowerShell here-string piped to `node` (VM probe described above) | 0 | reproduced the incorrect view/command selection |
+| `npm.cmd test` (sandbox) | 1 | build passed; Windows ACLs blocked VS Code launch, so tests did not run |
+| `npm.cmd test` (outside sandbox) | 0 | 25 passing on VS Code 1.144.0 |
+| `npm.cmd run package` | 0 | produced `packages/towelwise/towelwise.vsix`, including compiled layout code |
+| `git diff --check 3b0b96e..HEAD` | 0 | passed |
 
-The first Codex review of `9f19831` also passed lint/build/package and 20 tests; its initial sandboxed test launch failed with an ACL error, then passed outside the sandbox. Claude Code reported 23 passing tests for the fixes, independently confirmed by the re-review above. CI has not been verified on `3b0b96e`. Use `npm.cmd` in PowerShell (`npm.ps1` is blocked by execution policy).
+Earlier evidence: Claude reported lint/build/test/package passing at `43b2972` (25 tests), tests written first, and the workspace-override regression failing without application scope. Codex's earlier review at `3b0b96e` independently passed 23 tests. These are separate from the current results above. **CI has not been verified; the previous handoff reports no CI run on this branch.** Use `npm.cmd` in PowerShell; tests needed execution outside the sandbox.
 
-## Further review and test gaps
+The build from `43b2972` is installed in the user's VS Code. After any VSIX install, windows must be reloaded or they keep the old manifest.
 
-- `liveVsCode`, `discoverContainers` and `chooseLayout` have no automated tests. The VM probe was exploratory; it was not added to the suite. The existing focus test supplies an already-built view map, so it bypasses discovery.
-- Actual side-bar reopening, repeated restore with an agent in the bottom panel, and saved-order behavior when two containers share an area remain manual checks. The focus-command implementation avoids toggling; this source inspection does not establish those runtime results.
-- Availability still means a command exists in `getCommands(true)`, as accepted by the updated spec. Picker cancellation, selection order and "Not installed" entries remain untested.
-- Startup apply: silent about skipped containers by design; runs even when another window started hyperspace only if its state file is absent (it checks the shared file).
+## Manual checks
 
-## Remaining work and checks still pending
+Confirmed by the user on their machine (Antigravity, Claude Code, Codex, Chat): Choose Layout saved a selection; Restore Layout reopened the closed side bars as chosen; hyperspace with one agent open jumped and restored; `Ctrl+Alt+L` afterwards brought back the three-column layout.
 
-Smallest next action: when the user requests the remaining fix, add a failing discovery regression for two extensions contributing to one container, then correct the mapping. Preserve approved decisions and ask about unresolved choices before dependent implementation.
+Still unchecked: restore in another project; startup apply (`towelwise.layout.applyOnStartup`) after a reload; startup apply while hyperspace hides a side bar (the "hyperspace wins" rule); hyperspace full screen (`towelwise.hyperspace.fullScreen`) engaging and exiting, and reload recovery with it; macOS; the VS Code 1.90 floor.
 
-- Manual (needs the user, and a build installed then windows reloaded): choose Antigravity and Codex in Choose Layout; close both side bars and run Restore Layout; run it in another project; turn on startup apply and reload; with a side bar set to hide in hyperspace, jump, reload, and confirm startup apply does not reopen it. The open spec question is whether the show command reliably opens a closed side bar for each agent.
-- Not checked anywhere: CI for this branch, macOS, VS Code 1.90 floor, the picker UI.
-- The spec still marks implementer defaults unapproved (including key, setting names/identifiers and exact picker presentation). Its newer approved review decision covers listing all containers with area/id, reporting commands run, first-view focus with fallback, and application scope; preserve those approvals.
-- Hyperspace follow-ups still open: the user confirmed multi-window restore works and that the full-screen setting appears after a window reload, but has not explicitly confirmed full screen engaging and exiting; reload recovery with full screen is unconfirmed. Known limits: a crash between a successful full-screen toggle and recording it leaves a full-screen window restore does not know about (F11 fixes it); PID reuse can delay lock recovery up to one hour; crashes can leave ignored `hyperspace.tmp.*` files.
-- After installing a VSIX, windows must be reloaded or they keep the old manifest. This is not yet written into AGENTS.md (offered, not requested).
+## Coverage limits
+
+- `discoverContainers`/`chooseLayout` (picker list, order, "Not installed" entries) have no automated test.
+- Real view visibility beyond the user's manual checks remains unverified. Restore reports commands run, not visibility (VS Code cannot say which of an extension's containers is enabled; this is an approved limit).
+- Startup apply is silent about skipped containers by design.
+
+## Known limits and open items carried forward
+
+- Hyperspace: a crash between a successful full-screen toggle and recording it leaves a full-screen window that restore does not know about (F11 fixes it). PID reuse can delay lock recovery up to one hour; crashes can leave ignored `hyperspace.tmp.*` files.
+- Not written into AGENTS.md (offered, not requested): reload windows after installing a VSIX.
 - Bootstrap defaults (package path `packages/towelwise/`, `engines.vscode ^1.90.0`, CI Node 22 on `ubuntu-latest`, packaging flags) were flagged in the Phase 1 review and never explicitly approved.
 - Not authorized by this handoff: pushing, opening a PR, publishing, installing a VSIX. Each is a separate request.
 
-Suggested skills: `tdd` for regression tests when fixes are authorized; `code-review` for the follow-up review; `diagnosing-bugs` if a manual check fails; `grill-with-docs` then `to-spec` for unresolved scope or the next slice; `handoff` when transferring again. Discover skills in the receiving host; do not assume availability. This handoff update used `handoff` at `C:/Users/thisi/.agents/skills/handoff/SKILL.md`.
+## Smallest next action
+
+Review is complete with no findings. If the user asks: push `feat/saved-layout`, open the PR, and check CI. Remaining manual checks above still need completion. Phase 2 after that: slice 3 (beginner profile) and slice 4 (named layouts), each needing its own grilling and spec.
+
+Suggested skills: `code-review` for subsequent changes; `tdd` for any fix; `diagnosing-bugs` if a manual check fails; `grill-with-docs` then `to-spec` for the next slice; `handoff` when transferring again. Discover skills in the receiving host; do not assume availability.
