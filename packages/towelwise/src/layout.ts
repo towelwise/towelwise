@@ -27,18 +27,37 @@ const layoutConfig = () => vscode.workspace.getConfiguration('towelwise.layout')
 // A hand-edited setting may hold anything; only strings can be container ids.
 const savedContainers = () => layoutConfig().get<unknown[]>('containers', []).filter((id): id is string => typeof id === 'string');
 
-export async function liveVsCode(): Promise<LayoutEnv> {
-  const views = new Map<string, string>();
-  for (const ext of vscode.extensions.all) {
-    for (const [container, list] of Object.entries(ext.packageJSON?.contributes?.views ?? {})) {
-      const first = (list as { id?: string }[])[0]?.id;
-      if (first) views.set(container, first);
+interface Manifest {
+  contributes?: {
+    viewsContainers?: Record<string, { id: string }[]>;
+    views?: Record<string, { id?: string }[]>;
+  };
+}
+
+/**
+ * Each container's first view. Other extensions can contribute views to someone else's container, and theirs may
+ * be inactive, so the view from the extension that declares the container wins; another extension's view is only a
+ * fallback for an owner that contributes none.
+ */
+export function viewsByContainer(manifests: Manifest[]): Map<string, string> {
+  const owned = new Map<string, string>();
+  const others = new Map<string, string>();
+  for (const m of manifests) {
+    const declared = new Set(Object.values(m?.contributes?.viewsContainers ?? {}).flatMap((list) => list.map((c) => c.id)));
+    for (const [container, list] of Object.entries(m?.contributes?.views ?? {})) {
+      const first = list[0]?.id;
+      const target = declared.has(container) ? owned : others;
+      if (first && !target.has(container)) target.set(container, first);
     }
   }
+  return new Map([...others, ...owned]);
+}
+
+export async function liveVsCode(): Promise<LayoutEnv> {
   return {
     run: (command) => vscode.commands.executeCommand(command),
     available: new Set(await vscode.commands.getCommands(true)),
-    views,
+    views: viewsByContainer(vscode.extensions.all.map((ext) => ext.packageJSON)),
   };
 }
 

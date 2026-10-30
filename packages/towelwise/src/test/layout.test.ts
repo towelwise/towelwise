@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { stateFile } from '../hyperspace';
-import { applyOnStartup, restoreLayout } from '../layout';
+import { applyOnStartup, restoreLayout, viewsByContainer } from '../layout';
 
 const CONTAINERS = 'towelwise.layout.containers';
 const ON_STARTUP = 'towelwise.layout.applyOnStartup';
@@ -72,6 +72,23 @@ suite('layout', () => {
 
     await restoreLayout(vs);
     assert.deepStrictEqual(vs.ran, ['codex.view.focus', 'workbench.view.extension.plain']);
+  });
+
+  test('the extension that declares a container owns its first view, whatever order extensions load in', () => {
+    const owner = {
+      contributes: { viewsContainers: { activitybar: [{ id: 'agent' }] }, views: { agent: [{ id: 'owner.view' }] } },
+    };
+    const addon = { contributes: { views: { agent: [{ id: 'addon.view' }] } } };
+
+    assert.strictEqual(viewsByContainer([addon, owner]).get('agent'), 'owner.view');
+    assert.strictEqual(viewsByContainer([owner, addon]).get('agent'), 'owner.view');
+  });
+
+  test('a view from another extension is used only when the owner contributes none', () => {
+    const owner = { contributes: { viewsContainers: { activitybar: [{ id: 'agent' }] } } };
+    const addon = { contributes: { views: { agent: [{ id: 'addon.view' }] } } };
+
+    assert.strictEqual(viewsByContainer([owner, addon]).get('agent'), 'addon.view');
   });
 
   test('a workspace setting cannot override the saved layout', async () => {
