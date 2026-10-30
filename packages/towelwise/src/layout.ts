@@ -84,7 +84,10 @@ export async function restoreLayout(vs: LayoutEnv): Promise<{ ran: string[]; ski
 export async function applyOnStartup(storageDir: string, env: () => Promise<LayoutEnv>): Promise<boolean> {
   // The environment is built only when needed: it reads every command and extension manifest, on every window open.
   if (!layoutConfig().get('applyOnStartup', false) || isActive(storageDir)) return false;
-  await restoreLayout(await env());
+  const vs = await env();
+  // Another window may have started hyperspace while the environment loaded.
+  if (isActive(storageDir)) return false;
+  await restoreLayout(vs);
   return true;
 }
 

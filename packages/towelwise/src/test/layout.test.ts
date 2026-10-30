@@ -145,6 +145,19 @@ suite('layout', () => {
     assert.deepStrictEqual(await run(), { applied: false, ran: [] });
   });
 
+  test('startup apply is skipped if hyperspace turns on while the environment is loading', async () => {
+    await config().update(CONTAINERS, ['codex'], GLOBAL);
+    await config().update(ON_STARTUP, true, GLOBAL);
+    const vs = fakeVsCode(['workbench.view.extension.codex']);
+
+    const applied = await applyOnStartup(storageDir, async () => {
+      fs.writeFileSync(stateFile(storageDir), '[]'); // another window jumps while we wait
+      return vs;
+    });
+    assert.strictEqual(applied, false);
+    assert.deepStrictEqual(vs.ran, []);
+  });
+
   test('startup does not build the VS Code environment when apply on startup is off', async () => {
     let built = 0;
     const vs = fakeVsCode(['workbench.view.extension.codex']);
