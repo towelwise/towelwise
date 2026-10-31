@@ -1,5 +1,36 @@
 # Handoff
 
+## 2026-10-31 — Claude Code: paused for a few days of real use; named layouts deferred
+
+### For the reviewer
+
+Nothing to review: this entry only records where the work paused. The user is using the installed build in other projects for a few days and will then come back to Phase 2. Do not start new work until they ask.
+
+Decided; do not reopen: named layouts (roadmap slice 4) is deferred until daily use shows a need; if built, switching closes the side areas first and then opens the layout's panels (editor tabs stay open).
+
+### Status
+
+- Branch `docs/defer-named-layouts` from `main` at `05fe302`, for this note and the roadmap change. No code changed since PR #11.
+- The installed build is from `main` at `f5f9162` (PR #11); later commits are CI and docs only.
+- `AGENTS.md` and `CLAUDE.md` are local and git-ignored; a spare copy is in `C:\AI Projects\Towelwise AI\_local-agent-files\`.
+
+### Checks
+
+No code changed, so lint, build, test and package were not rerun for this note. CI runs on the PR.
+
+### Still open
+
+- Manual checks: restore in another project; hyperspace winning on startup; the full-screen round trip and reload recovery; the `Alt+Shift` keys with several keyboard languages. Not checked: macOS.
+- The user has not read the package README, which a Marketplace page would show. Whether to add a README tip naming `claude-vscode.reopenClosedSession` is open; Claude advised leaving it out.
+- Roadmap: slice 5 (quiet profile) waits on a way to create a profile. The first public `0.x` release needs a release workflow, publishing tokens and an icon.
+- Known limits: the full-screen crash window, PID reuse delaying lock recovery, leftover temp files, and limited coverage of the picker, discovery and recovery prompt.
+
+### Next action
+
+When the user returns, ask what daily use showed, fix what annoyed them, then revisit Phase 2: first-release prep, or Phase 3, which the roadmap says can run alongside. Suggested skills: `grill-with-docs` then `to-spec`; `diagnosing-bugs` for anything that misbehaved.
+
+---
+
 ## 2026-10-30 — Codex: review of ffe2f65 complete; R1 resolved, no new findings
 
 ### For the reviewer
