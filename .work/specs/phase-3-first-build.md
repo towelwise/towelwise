@@ -40,13 +40,13 @@ Decisions for later phases, recorded in ROADMAP.md: proportional sizes first, a 
 
 Build success, CI, launch and manual sign-in are separate results. None proves the others.
 
-## Implementer defaults (not approved; flag in review)
+## Implementer defaults (approved by the user, 2026-10-31)
 
-- Where the scripts and patches live in the repo, and the upstream version pinned first.
-- The application id, data folder name and URL scheme, such as `towelwise-ai`.
-- A zip or portable build first, with no installer.
-- Building locally first, and whether CI builds at all in this milestone. A public repo's runners are free, but build time and limits are unmeasured.
-- How much of VSCodium's patch set to keep, and how the built-in extension is added to the build.
+- Scripts and patches live in a top-level `ide/` folder: `ide/build.sh`, `ide/patches/`, a `product.json` overlay, and a small file recording the pinned upstream version. The first pin is VSCodium 1.143, where the sign-in evidence was gathered, so a newer release is the target for criterion 7.
+- Identity: name `Towelwise AI`; application and URL scheme `towelwise-ai`; data folder `.towelwise-ai`; a new Windows app id. The built-in extension keeps its id `towelwise.towelwise`.
+- A portable zip first, with no installer.
+- Local builds only in this milestone, with no CI build. Decide on CI after the first run gives real build time and size.
+- Start with VSCodium's whole patch set and drop a patch only when it breaks something; add none of our own beyond identity. The built `packages/towelwise` is copied into the app's built-in extensions during the build, not added by a patch.
 
 ## Out of scope
 
@@ -60,6 +60,6 @@ Build success, CI, launch and manual sign-in are separate results. None proves t
 ## Unresolved / external prerequisites
 
 - Whether fresh sign-in works under our own URL scheme. VSCodium passed, but its scheme is its own, and Codex's bundle has one hardcoded `vscode://` mention.
-- Whether a full build fits this Windows machine and the time available.
+- Whether a full build fits this Windows machine and the time available (16 GB RAM, 12 logical CPUs, 401 GB free on 2026-10-31).
 - Before any public release: Anthropic's answer on install buttons, a read of OpenAI's terms, and code signing, since an unsigned Windows app triggers warnings.
-- Tools needed to build, per VSCodium's docs: Git Bash, Node at the pinned version, jq, Python 3.11, rustup, 7-Zip, plus Windows build tools. None has been checked on this machine yet.
+- Build tools, checked on this machine 2026-10-31: Git Bash, Node 24.18.0 (VSCodium's master `.nvmrc`; recheck at the pinned commit), Python 3.11.9, rustup, 7-Zip (now on PATH), jq 1.8.2 (installed), and Visual Studio Build Tools 2022 with ATL and Spectre libraries (added). Long paths are on in Windows and git. Launch the build with Git Bash by full path, since `bash` on PATH is the empty WSL stub. The ATL and Spectre requirement is from VS Code's wiki, from memory, not confirmed by a build.

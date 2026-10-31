@@ -29,7 +29,7 @@ This is the working roadmap: the order things get built, and what "done" means f
 | 5 | The memory experiment (Hindsight on Windows) | Can run alongside Phase 4 |
 | 6 | **Towelwise Recall**: the mailbox, then the Probability Drive | — |
 | 7 | **Towelwise Guide**: fundamentals library first | — |
-| 8 | **DOUG**: once there's memory worth briefing from | — |
+| 8 | **DOUG**: later, once there's memory worth briefing from; not one of the core three | — |
 
 The guiding rule: **a small, real prototype in weeks, not a finished suite in 2027.**
 
@@ -153,7 +153,7 @@ Built into the IDE, and can be turned off.
 
 ## Phase 8 — DOUG
 
-Built into the IDE, and can be turned off.
+Offered further down the road, after Hyperspace, Recall and Learning. It's coming, but it isn't one of the core three.
 
 1. **Read-only briefings** built straight from git, approved memory and agent events. The AI only words them.
 2. **Cheerful and honest:** bad news first, then the cheer.
@@ -187,7 +187,7 @@ Built into the IDE, and can be turned off.
 | Does today's layout merge into the hyperspace layout, or stay separate? | Phase 4 |
 | What is left of the quiet profile idea, now the whole IDE can be quiet? | Phase 4 |
 | When is the first public release, and what does it need? (Signing, an installer, updates, Anthropic's answer on install buttons, OpenAI's terms) | After Phase 4 |
-| Does DOUG stay in the core, given the product is defined by Hyperspace, Recall and Learning? | After Phase 6 |
+| ~~Does DOUG stay in the core?~~ Answered 2026-10-31: no. Order is Hyperspace and Recall, then Learning, then DOUG later | Done |
 | Hindsight on Windows as a shared background service? | Phase 5 |
 | What must the Hindsight fork change, and how does it stay current with upstream? | Phase 5 |
 | Is no-AI memory enough for "why" questions? | Phase 5 |
