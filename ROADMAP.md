@@ -132,7 +132,7 @@ A spike that answers whether Recall's memory works the way the vision says, befo
 
 | Question | Needed by |
 |---|---|
-| Weekly hours, so the prototype can be dated honestly | After Phase 2 starts |
+| ~~Weekly hours, so the prototype can be dated honestly~~ Answered 2026-10-31: about 5 to 10 hours a week | Done |
 | Which agents first? (Claude Code, Codex, Copilot are clear; check Google's terms for Antigravity/Gemini) | Phase 2 |
 | Hindsight on Windows as a shared background service? | Phase 3 |
 | Is no-AI memory enough for "why" questions? | Phase 3 |
