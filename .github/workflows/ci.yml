@@ -24,3 +24,19 @@ jobs:
         with:
           name: vsix
           path: packages/*/*.vsix
+
+  # The extension claims engines.vscode ^1.90.0 (packages/towelwise/package.json), so run the tests at exactly that.
+  # Keep the version below in step with engines.vscode.
+  min-vscode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: xvfb-run -a npm test
+        env:
+          VSCODE_TEST_VERSION: 1.90.0

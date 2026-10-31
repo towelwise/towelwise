@@ -30,11 +30,12 @@ There are no decision records yet. None of these choices required one.
 - **Smoke checks:** lint, `tsc`, and the package step (`vsce package`) exit 0, and the `.vsix` file exists at the recorded path.
 - **Manual / pending:** CI run on GitHub; installing the `.vsix` into VS Code. Neither is part of this slice.
 
-## Implementer defaults (not approved decisions; flag in review)
+## Implementer defaults (approved by the user, 2026-10-31)
 
 - Package path `packages/towelwise/`.
-- The `engines.vscode` floor and the Node version pin in CI.
+- The `engines.vscode` floor, `^1.90.0`, and the Node version pin in CI, Node 22. The floor was untested until the same day; CI now has a `min-vscode` job that runs the whole test suite on VS Code 1.90.0 (set through the `VSCODE_TEST_VERSION` variable in `.vscode-test.mjs`). Keep that version in step with `engines.vscode`.
 - CI runner `ubuntu-latest` with `xvfb-run` for the headless VS Code test.
+- Packaging with `vsce package --no-dependencies` (the extension has no runtime dependencies); the `--allow-missing-repository` flag was dropped once the `repository` field was added.
 
 ## Out of scope
 
