@@ -58,7 +58,7 @@ The core extension, built in small slices. Each slice ships on its own.
 1. **Jump to hyperspace.** One command (or key) hides the chrome and areas you chose, leaving your agents in view; the same command puts your settings back exactly.
 2. **Saved layout.** Choose the agent panels you want showing and bring them back with one keypress, or automatically when a window opens, in any project. Fixes side bars that come back closed after a reload, an update or a project switch.
 3. **First-run walkthrough.** A short guided start, shown once after install, for people who already have their agents: arrange them, choose a layout, restore it, try hyperspace.
-4. **Named layouts.** Save several layouts ("three agents", "just Claude") and pick one.
+4. **Named layouts.** *Deferred until daily use shows a need.* Save several layouts ("three agents", "just Claude") and pick one. If built, switching closes the side areas first and then opens the layout's panels, so a smaller layout really looks smaller; editor tabs stay open, because VS Code can't close them selectively.
 5. **Quiet profile.** A ready-made VS Code profile for agent work. VS Code gives extensions no way to create a profile, so this waits for a way that is worth the manual import step. Your normal setup stays untouched.
 
 **Done when:** you use it every day on your own three-agent layout and it survives reloads and extension updates.
