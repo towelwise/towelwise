@@ -4,3 +4,7 @@ out/
 *.vsix
 packages/*/LICENSE
 packages/*/test-workspace/.vscode/
+
+# Local agent instructions: read by Claude Code and Codex from disk, not part of the project
+AGENTS.md
+CLAUDE.md
