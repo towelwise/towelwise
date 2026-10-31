@@ -1,11 +1,19 @@
 # Towelwise AI — Roadmap
 
-> A suite of plugins and applications designed to keep you all-knowing in your projects.
+> **YOUR IDE Built for Hyperspace**
 > *Don't Panic.*
 
-Updated October 27, 2026 · Johnny T
+Towelwise AI is built around three things, and you build all three:
+
+- **Hyperspace:** a focus mode laid out exactly your way.
+- **Recall:** a memory of what you approved, contained to the IDE.
+- **Learning:** lessons drawn from your own work.
+
+Updated October 31, 2026 · Johnny T
 
 This is the working roadmap: the order things get built, and what "done" means for each step. Dates come after the first prototype, from real hours rather than guesses.
+
+**The pivot (October 31, 2026):** Towelwise began as a VS Code extension. It is now **Towelwise AI**, an IDE built from Code-OSS. See [decision 0004](docs/decisions/0004-towelwise-ai-is-an-ide-built-from-code-oss-patches.md).
 
 ---
 
@@ -15,11 +23,13 @@ This is the working roadmap: the order things get built, and what "done" means f
 |---|---|---|
 | 0 | Claim the names | Done |
 | 1 | Set up the workshop | Done |
-| 2 | First prototype: **Towelwise** (hyperspace, layout, walkthrough, quiet profile) | Next |
-| 3 | The memory experiment (Hindsight on Windows) | Can run alongside Phase 2 |
-| 4 | **Towelwise Recall**: approval inbox, then the Probability Drive | — |
-| 5 | **Towelwise Guide**: fundamentals library first | — |
-| 6 | **DOUG**: once there's memory worth briefing from | — |
+| 2 | Extension groundwork (hyperspace, layout, walkthrough) | Done; becomes the built-in extension |
+| 3 | **First build** of Towelwise AI | Next |
+| 4 | **The layout editor** and locked hyperspace | — |
+| 5 | The memory experiment (Hindsight on Windows) | Can run alongside Phase 4 |
+| 6 | **Towelwise Recall**: the mailbox, then the Probability Drive | — |
+| 7 | **Towelwise Guide**: fundamentals library first | — |
+| 8 | **DOUG**: once there's memory worth briefing from | — |
 
 The guiding rule: **a small, real prototype in weeks, not a finished suite in 2027.**
 
@@ -40,34 +50,61 @@ The guiding rule: **a small, real prototype in weeks, not a finished suite in 20
 
 ## Phase 1 — Set up the workshop
 
-- [x] Main code repo (e.g. `towelwise/towelwise`) holding the three extensions and the extension pack as separate packages
+- [x] Main code repo (`towelwise/towelwise`), with parts as separate packages
 - [x] Apache 2.0 `LICENSE` and `NOTICE`, README, `CONTRIBUTING.md`, code of conduct, issue and PR templates
 - [x] Protected `main`: changes only through pull requests, checks must pass
 - [x] CI on every pull request: lint, tests, and package a `.vsix` to prove it builds
 - [x] `docs/decisions/` for short decision records (one page each: the choice, why, what was ruled out)
-- [x] `CLAUDE.md` / `AGENTS.md` in the repo so every agent follows the same house rules
+- [x] House rules for every agent (`CLAUDE.md` / `AGENTS.md`, now kept locally and not in the repo)
 
 **Done when:** an empty extension builds in CI and installs from the packaged `.vsix`.
 
 ---
 
-## Phase 2 — First prototype: Towelwise
+## Phase 2 — Extension groundwork
 
-The core extension, built in small slices. Each slice ships on its own.
+Built and tested in real use as a VS Code extension, never released. This code becomes the IDE's built-in extension.
 
-1. **Jump to hyperspace.** One command (or key) hides the chrome and areas you chose, leaving your agents in view; the same command puts your settings back exactly.
-2. **Saved layout.** Choose the agent panels you want showing and bring them back with one keypress, or automatically when a window opens, in any project. Fixes side bars that come back closed after a reload, an update or a project switch.
-3. **First-run walkthrough.** A short guided start, shown once after install, for people who already have their agents: arrange them, choose a layout, restore it, try hyperspace.
-4. **Named layouts.** *Deferred until daily use shows a need.* Save several layouts ("three agents", "just Claude") and pick one. If built, switching closes the side areas first and then opens the layout's panels, so a smaller layout really looks smaller; editor tabs stay open, because VS Code can't close them selectively.
-5. **Quiet profile.** A ready-made VS Code profile for agent work. VS Code gives extensions no way to create a profile, so this waits for a way that is worth the manual import step. Your normal setup stays untouched.
-
-**Done when:** you use it every day on your own three-agent layout and it survives reloads and extension updates.
-
-**First public release:** a `0.x` pre-release on the Marketplace and Open VSX.
+- [x] **Jump to hyperspace.** One key hides the chrome and areas you chose, and the same key puts your settings back.
+- [x] **Saved layout.** Choose the agent panels to show and bring them back with one key, or when a window opens.
+- [x] **Layout commands and log.** Run commands such as an agent's "reopen closed chat" on restore, with a quiet Output log of what ran.
+- [x] **First-run walkthrough.** A short guided start, shown once.
 
 ---
 
-## Phase 3 — The memory experiment
+## Phase 3 — First build
+
+A real Towelwise AI app for Windows, with no core patches of our own. See [the spec](.work/specs/phase-3-first-build.md).
+
+- [ ] Build scripts and patches on upstream Code-OSS, starting from VSCodium's
+- [ ] Its own name, icon and data, side by side with VS Code
+- [ ] Open VSX as its store; telemetry off
+- [ ] Phase 2's code built in
+- [ ] Claude Code and Codex install, sign in fresh, and work
+- [ ] One real upstream update done and timed
+
+**Done when:** you can run the app daily, and an upstream update has been done and measured, so we know whether the upkeep is sustainable.
+
+---
+
+## Phase 4 — The layout editor
+
+The first core patch, kept small and careful. This is the headline feature: your UI, your way.
+
+1. **Layout mode.** A visible box over every part of the window. Turn each on or off, and set its width and height.
+2. **Save as your hyperspace layout.** Sizes are proportions at first, so they carry across screens.
+3. **Locked hyperspace.** While it's on, the window holds to your layout and no other way. Anything that wants to open shows a notification instead; click it and it opens in a hovering window you can dismiss.
+4. **Default keys** for going in and out of hyperspace, with more to come. Today's defaults are `Alt+Shift+J` and `Alt+Shift+L`.
+5. **Works for anyone:** agents, plain text editing without AI, folder lists, whatever they choose.
+6. **First-run screen.** "Works with Claude Code and Codex", with install buttons that download from Open VSX on your click, a list of more agents (each checked and tried first), and a real "edit without AI" choice. Agents are never bundled, and sign-in stays in the agent's own panel.
+
+Later: pixel-exact or per-monitor layouts, and named layouts ("three agents", "just Claude"), which wait until daily use shows a need. If built, switching closes the side areas first, then opens the layout's panels.
+
+**Done when:** you set your own widths once, jump, and the window is exactly that every time, through reloads and updates.
+
+---
+
+## Phase 5 — The memory experiment
 
 A spike that answers whether Recall's memory works the way the vision says, before building any UI for it.
 
@@ -77,38 +114,50 @@ A spike that answers whether Recall's memory works the way the vision says, befo
 - [ ] A quarantine bank that no agent can see
 - [ ] A recall-only connection for agents (writes refused)
 - [ ] One bank per project, with tests proving one project can't see another's memory
+- [ ] Memory contained to the IDE: nothing from outside enters it, and agents reach it only from inside Towelwise AI
 - [ ] Secret patterns filtered before anything is stored
+- [ ] What can actually be captured, given agent panels are closed boxes: agent tool calls, vendor hooks or transcripts, IDE activity
 
-**Done when:** a decision record answers two questions: does it run reliably on Windows, and does plain retrieval of approved text answer "why" questions well enough? If not, the fallback is the user's own API key.
+**Done when:** a decision record answers three questions: does it run reliably on Windows, does plain retrieval of approved text answer "why" questions well enough (if not, the fallback is the user's own API key), and how does memory get captured? It also says what a fork of Hindsight must change.
 
 ---
 
-## Phase 4 — Towelwise Recall
+## Phase 6 — Towelwise Recall
 
-1. **The approval inbox.** Review what Hindsight gathered after each run; approve into project memory or reject and delete.
+Built into the IDE, and can be turned off.
+
+0. **Fork Hindsight.** Hindsight (MIT) is forked and shaped to recall the way we want, then becomes an official Towelwise component in the codebase. This is real work of its own, and its upkeep counts alongside Code-OSS.
+1. **The mailbox.** Review what was captured; approve into project memory or reject and delete. "Allow always for this project" skips the mailbox for people who don't want it.
 2. **Agent access.** Agents read approved memory through the recall-only connection and their instruction files.
-3. **The Probability Drive.** The live bottom strip: probable memories appear as dim flickering stars. Click one to jump to that item in the inbox (dropping out of hyperspace, with *Return to hyperspace* to go back), or leave it for after your session. Hover previews, gentle motion, reduced-motion option.
+3. **Export.** A deliberate, one-way copy of memory out to another knowledge bank.
+4. **The Probability Drive.** The live bottom strip: probable memories appear as dim flickering stars. Click one to jump to that item in the mailbox (dropping out of hyperspace, with *Return to hyperspace* to go back), or leave it for after your session. Hover previews, gentle motion, reduced-motion option.
+
+"Contained" describes Towelwise's memory. Chats still go to each agent's vendor under their terms, and agents keep their own memory.
 
 **Done when:** a full session's worth of memory goes from gathered → reviewed → approved → recalled by an agent, and nothing unapproved ever reaches one.
 
 ---
 
-## Phase 5 — Towelwise Guide
+## Phase 7 — Towelwise Guide
+
+Built into the IDE, and can be turned off.
 
 1. **Don't Panic cover and fundamentals library:** short lessons from "what is a branch" to "what does an API key do".
 2. **Linked to Recall:** when memory says *why* an agent chose something, the Guide teaches *what* it is.
 3. **Your code as the textbook:** lessons link to real examples from your projects.
-4. **At your pace:** adaptive lessons through a local model or, with consent, VS Code's language models on your Copilot plan.
+4. **At your pace:** adaptive lessons through a local model or the user's own key.
 
-**Done when:** a newcomer can go from a decision in Recall to a lesson that explains it, without leaving VS Code.
+**Done when:** a newcomer can go from a decision in Recall to a lesson that explains it, without leaving Towelwise AI.
 
 ---
 
-## Phase 6 — DOUG
+## Phase 8 — DOUG
+
+Built into the IDE, and can be turned off.
 
 1. **Read-only briefings** built straight from git, approved memory and agent events. The AI only words them.
 2. **Cheerful and honest:** bad news first, then the cheer.
-3. **Standalone companion app,** so it works with VS Code closed.
+3. **Standalone companion app,** so it works with the IDE closed.
 4. **Extras, opt-in:** voice, reminders, email, calendar, Pomodoro.
 5. **Easter eggs:** Genuine People Personality; FARTS mode.
 
@@ -133,12 +182,17 @@ A spike that answers whether Recall's memory works the way the vision says, befo
 | Question | Needed by |
 |---|---|
 | ~~Weekly hours, so the prototype can be dated honestly~~ Answered 2026-10-31: about 5 to 10 hours a week | Done |
-| Which agents first? (Claude Code, Codex, Copilot are clear; check Google's terms for Antigravity/Gemini) | Phase 2 |
-| Hindsight on Windows as a shared background service? | Phase 3 |
-| Is no-AI memory enough for "why" questions? | Phase 3 |
-| Link approval: user-visible links only, or every internal link? | Phase 4 |
-| How corrections and deletions survive reprocessing and restores | Phase 4 |
-| Copilot free plan: does language model access work, and how much? | Phase 5 |
+| Is the upstream upkeep sustainable at that pace? | Phase 3 |
+| Which agents go on the "more agents" list? (Claude Code and Codex are first; Cline, Gemini Code Assist and Kilo Code are candidates once checked) | Phase 4 |
+| Does today's layout merge into the hyperspace layout, or stay separate? | Phase 4 |
+| What is left of the quiet profile idea, now the whole IDE can be quiet? | Phase 4 |
+| When is the first public release, and what does it need? (Signing, an installer, updates, Anthropic's answer on install buttons, OpenAI's terms) | After Phase 4 |
+| Does DOUG stay in the core, given the product is defined by Hyperspace, Recall and Learning? | After Phase 6 |
+| Hindsight on Windows as a shared background service? | Phase 5 |
+| What must the Hindsight fork change, and how does it stay current with upstream? | Phase 5 |
+| Is no-AI memory enough for "why" questions? | Phase 5 |
+| Link approval: user-visible links only, or every internal link? | Phase 6 |
+| How corrections and deletions survive reprocessing and restores | Phase 6 |
 
 ---
 
