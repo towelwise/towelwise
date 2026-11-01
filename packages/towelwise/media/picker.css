@@ -1,0 +1,133 @@
+body {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  padding: 16px 24px;
+  max-width: 880px;
+}
+
+h1 {
+  font-size: 1.4em;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.intro,
+.legend,
+.info {
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.5;
+}
+
+/* A schematic of the window. Each part is a button; Hide is dashed and dim, Keep is solid. */
+.mock {
+  display: grid;
+  grid-template-columns: 90px 1fr 2fr 1fr;
+  grid-template-rows: 44px 140px 90px 36px;
+  grid-template-areas:
+    'menu palette palette layout'
+    'act pri editor sec'
+    'act pri panel sec'
+    'status status status status';
+  gap: 6px;
+  margin: 16px 0;
+  padding: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px;
+  font: inherit;
+  font-size: 0.9em;
+  text-align: center;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background);
+  border: 2px solid var(--vscode-focusBorder);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.part.hide {
+  border-style: dashed;
+  border-color: var(--vscode-descriptionForeground);
+  opacity: 0.6;
+}
+
+.part:hover,
+.part:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+.part.editor {
+  cursor: default;
+  background: var(--vscode-editor-background);
+  border-color: var(--vscode-panel-border);
+  border-style: solid;
+  opacity: 1;
+}
+
+.part[data-area='menu'] { grid-area: menu; }
+.part[data-area='palette'] { grid-area: palette; }
+.part[data-area='layout'] { grid-area: layout; }
+.part[data-area='act'] { grid-area: act; }
+.part[data-area='pri'] { grid-area: pri; }
+.part[data-area='editor'] { grid-area: editor; }
+.part[data-area='sec'] { grid-area: sec; }
+.part[data-area='panel'] { grid-area: panel; }
+.part[data-area='status'] { grid-area: status; }
+
+.badge {
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.note {
+  font-size: 0.8em;
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+
+button:not(.part) {
+  padding: 6px 14px;
+  font: inherit;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+button.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+.status {
+  min-height: 1.5em;
+}
+
+.status.error {
+  color: var(--vscode-errorForeground);
+}

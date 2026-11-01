@@ -8,9 +8,16 @@ suite('towelwise.towelwise', () => {
     await ext.activate();
     assert.strictEqual(ext.isActive, true);
     const commands = await vscode.commands.getCommands(true);
-    for (const id of ['towelwise.hyperspace.toggle', 'towelwise.layout.choose', 'towelwise.layout.restore']) {
+    for (const id of ['towelwise.hyperspace.toggle', 'towelwise.hyperspace.edit', 'towelwise.layout.choose', 'towelwise.layout.restore']) {
       assert.ok(commands.includes(id), `${id} not registered`);
     }
+  });
+
+  test('Edit Hyperspace Layout is in the palette and has no default shortcut', () => {
+    const contributes = vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON.contributes;
+    const command = contributes.commands.find((c: { command: string }) => c.command === 'towelwise.hyperspace.edit');
+    assert.strictEqual(command?.title, 'Towelwise: Edit Hyperspace Layout');
+    assert.ok(!contributes.keybindings.some((k: { command: string }) => k.command === 'towelwise.hyperspace.edit'));
   });
 
   test('a project cannot override the layout settings', () => {

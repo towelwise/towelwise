@@ -30,7 +30,7 @@ const DEFAULT_HOST: Host = { windowId: randomUUID(), run: (command) => vscode.co
 const TOGGLE_FULL_SCREEN = 'workbench.action.toggleFullScreen';
 
 // `option` is the towelwise.hyperspace.* setting that turns each item on or off.
-const CHROME = [
+export const CHROME = [
   { option: 'hideActivityBar', key: 'workbench.activityBar.location', hidden: 'hidden' },
   { option: 'hideStatusBar', key: 'workbench.statusBar.visible', hidden: false },
   { option: 'hideMenuBar', key: 'window.menuBarVisibility', hidden: 'hidden' },
@@ -40,7 +40,7 @@ const CHROME = [
 
 // Close commands are no-ops on an area that is already closed, so they never open anything.
 // The editor area is deliberately absent: VS Code only offers a blind toggle for it.
-const AREAS = [
+export const AREAS = [
   { option: 'hidePrimarySideBar', command: 'workbench.action.closeSidebar' },
   { option: 'hideSecondarySideBar', command: 'workbench.action.closeAuxiliaryBar' },
   { option: 'hideBottomPanel', command: 'workbench.action.closePanel' },

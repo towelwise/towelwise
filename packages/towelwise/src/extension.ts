@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { isActive, restore, toggle } from './hyperspace';
 import { applyOnStartup, chooseLayout, liveVsCode, restoreLayout } from './layout';
+import { openPicker } from './pickerPanel';
 
 const showError = (e: unknown) => void vscode.window.showErrorMessage(e instanceof Error ? e.message : String(e));
 
@@ -25,6 +26,7 @@ export function activate(context: vscode.ExtensionContext): void {
         showError(e);
       }
     }),
+    vscode.commands.registerCommand('towelwise.hyperspace.edit', () => openPicker(context, storageDir)),
     vscode.commands.registerCommand('towelwise.layout.choose', () => chooseLayout().catch(showError)),
     vscode.commands.registerCommand('towelwise.layout.restore', async () => {
       try {
