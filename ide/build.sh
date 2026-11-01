@@ -45,6 +45,11 @@ git checkout --quiet "${VSCODIUM_TAG}"
 jq -s '.[0] * .[1]' product.json "${IDE_DIR}/product.overlay.json" > product.json.tmp
 mv product.json.tmp product.json
 
+# Our own app icon and Windows tiles replace VSCodium's (a file overlay, not a patch).
+cp "${IDE_DIR}"/icons/win32/* src/stable/resources/win32/
+# The small logo at the left of the title bar.
+cp "${IDE_DIR}/icons/code-icon.svg" src/stable/src/vs/workbench/browser/media/code-icon.svg
+
 # 4. Same settings as VSCodium's dev/build.sh, with our naming.
 export APP_NAME="Towelwise AI"
 export ASSETS_REPOSITORY="towelwise/towelwise"

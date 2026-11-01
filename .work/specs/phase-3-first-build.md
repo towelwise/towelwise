@@ -48,6 +48,14 @@ Build success, CI, launch and manual sign-in are separate results. None proves t
 - Local builds only in this milestone, with no CI build. Decide on CI after the first run gives real build time and size.
 - Start with VSCodium's whole patch set and drop a patch only when it breaks something; add none of our own beyond identity. The built `packages/towelwise` is copied into the app's built-in extensions during the build, not added by a patch.
 
+## Results so far (owner's Windows machine, 16 GB RAM, 12 logical CPUs)
+
+- **Build (criterion 1):** `ide/build.sh` built the app from VSCodium `1.143.17232` (Code-OSS 1.143.1) with the machine otherwise idle. First run 2026-10-31: about 14 minutes (extension pack 36 s, source fetch 27 s, compile 12 min, zip about 1 min). Rebuild 2026-11-01 with the title-bar slice and the picker: about 13 minutes, including the zip step run end to end. App folder 993 MB, portable zip 289 MB.
+- **Identity, store, built-in extension (criteria 2 to 4):** the owner reported the identity and built-in extension checks good on 2026-10-31, and on 2026-11-01 reported hyperspace, the title-bar change and the picker working in the rebuilt app. The Open VSX gallery and identity fields were also read from the built `product.json`.
+- **Fresh sign-in (criterion 6):** Claude Code and Codex installed and signed in on the built app. **The browser did not return to the app by itself under the `towelwise-ai://` scheme; the owner had to switch back by hand** (2026-11-01). Not yet investigated: whether the scheme is registered for the portable zip, and Codex's one hardcoded `vscode://` mention.
+- **Not done:** criterion 7 (a real upstream update; VSCodium had no 1.144 tag on 2026-10-31), CI, macOS.
+- **Icon:** the owner supplied their own image (`ide/icons/towelwise.png`). The Windows executable icon and tiles are generated from it and copied over VSCodium's by the build. The title-bar logo and the editor watermark are still VSCodium's.
+
 ## Out of scope
 
 - The layout editor, locked hyperspace and any core layout patch (Phase 4).
