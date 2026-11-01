@@ -8,3 +8,6 @@ packages/*/test-workspace/.vscode/
 # Local agent instructions: read by Claude Code and Codex from disk, not part of the project
 AGENTS.md
 CLAUDE.md
+
+# Working notes between agents: local only, never committed
+.work/HANDOFF.md
