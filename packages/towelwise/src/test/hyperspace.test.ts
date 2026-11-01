@@ -8,8 +8,12 @@ import { isActive, restore, stateFile, toggle } from '../hyperspace';
 const ACTIVITY_BAR = 'workbench.activityBar.location';
 const STATUS_BAR = 'workbench.statusBar.visible';
 const MENU_BAR = 'window.menuBarVisibility';
+const COMMAND_CENTER = 'window.commandCenter';
+const LAYOUT_CONTROL = 'workbench.layoutControl.enabled';
 const FULL_SCREEN = 'towelwise.hyperspace.fullScreen';
-const KEYS = [ACTIVITY_BAR, STATUS_BAR, MENU_BAR];
+const HIDE_COMMAND_CENTER = 'towelwise.hyperspace.hideCommandCenter';
+const HIDE_LAYOUT_CONTROLS = 'towelwise.hyperspace.hideLayoutControls';
+const KEYS = [ACTIVITY_BAR, STATUS_BAR, MENU_BAR, COMMAND_CENTER, LAYOUT_CONTROL];
 
 const config = () => vscode.workspace.getConfiguration();
 const globalValues = () => KEYS.map((k) => config().inspect(k)?.globalValue);
@@ -28,7 +32,10 @@ suite('hyperspace', () => {
       await config().update(k, original[i], vscode.ConfigurationTarget.Global);
     }
     await config().update(STATUS_BAR, undefined, vscode.ConfigurationTarget.Workspace);
+    await config().update(LAYOUT_CONTROL, undefined, vscode.ConfigurationTarget.Workspace);
     await config().update(FULL_SCREEN, undefined, vscode.ConfigurationTarget.Global);
+    await config().update(HIDE_COMMAND_CENTER, undefined, vscode.ConfigurationTarget.Global);
+    await config().update(HIDE_LAYOUT_CONTROLS, undefined, vscode.ConfigurationTarget.Global);
     fs.rmSync(storageDir, { recursive: true, force: true });
   });
 
@@ -41,9 +48,39 @@ suite('hyperspace', () => {
     assert.strictEqual(config().get(ACTIVITY_BAR), 'hidden');
     assert.strictEqual(config().get(STATUS_BAR), false);
     assert.strictEqual(config().get(MENU_BAR), 'hidden');
+    assert.strictEqual(config().get(COMMAND_CENTER), false);
+    assert.strictEqual(config().get(LAYOUT_CONTROL), false);
 
     await toggle(storageDir);
-    assert.deepStrictEqual(globalValues(), [undefined, undefined, undefined]);
+    assert.deepStrictEqual(globalValues(), KEYS.map(() => undefined));
+  });
+
+  test('each new item can be left alone on its own', async () => {
+    await config().update(HIDE_COMMAND_CENTER, false, vscode.ConfigurationTarget.Global);
+    const before = globalValues();
+
+    await toggle(storageDir);
+    assert.strictEqual(config().inspect(COMMAND_CENTER)?.globalValue, before[3]);
+    assert.strictEqual(config().get(LAYOUT_CONTROL), false);
+    await toggle(storageDir);
+    assert.deepStrictEqual(globalValues(), before);
+
+    await config().update(HIDE_COMMAND_CENTER, undefined, vscode.ConfigurationTarget.Global);
+    await config().update(HIDE_LAYOUT_CONTROLS, false, vscode.ConfigurationTarget.Global);
+    await toggle(storageDir);
+    assert.strictEqual(config().get(COMMAND_CENTER), false);
+    assert.strictEqual(config().inspect(LAYOUT_CONTROL)?.globalValue, before[4]);
+    await toggle(storageDir);
+    assert.deepStrictEqual(globalValues(), before);
+  });
+
+  test('a workspace setting that keeps the layout buttons visible is reported and left alone', async () => {
+    await config().update(LAYOUT_CONTROL, true, vscode.ConfigurationTarget.Workspace);
+
+    const blocked = await toggle(storageDir);
+    assert.deepStrictEqual(blocked, [LAYOUT_CONTROL]);
+    assert.strictEqual(config().get(COMMAND_CENTER), false);
+    assert.strictEqual(config().inspect(LAYOUT_CONTROL)?.workspaceValue, true);
   });
   test("restore puts back a value that was already set", async () => {
     await config().update(STATUS_BAR, true, vscode.ConfigurationTarget.Global);

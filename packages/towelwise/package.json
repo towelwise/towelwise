@@ -79,6 +79,16 @@
             "default": true,
             "description": "Hide the menu bar in hyperspace."
           },
+          "towelwise.hyperspace.hideCommandCenter": {
+            "type": "boolean",
+            "default": true,
+            "description": "Hide the command palette box in the title bar in hyperspace."
+          },
+          "towelwise.hyperspace.hideLayoutControls": {
+            "type": "boolean",
+            "default": true,
+            "description": "Hide the layout buttons in the title bar in hyperspace."
+          },
           "towelwise.hyperspace.hidePrimarySideBar": {
             "type": "boolean",
             "default": false,

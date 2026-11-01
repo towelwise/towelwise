@@ -32,4 +32,14 @@ suite('towelwise.towelwise', () => {
     assert.deepStrictEqual(keys, { 'towelwise.hyperspace.toggle': 'alt+shift+j', 'towelwise.layout.restore': 'alt+shift+l' });
     assert.ok(!/ctrl\+alt/i.test(JSON.stringify(manifest.contributes)), 'a shortcut or step text still says Ctrl+Alt');
   });
+
+  test('hyperspace hides the palette box and layout buttons by default, with no scope of their own', () => {
+    const configuration = vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON.contributes.configuration;
+    const props = configuration.find((c: { title: string }) => c.title === 'Towelwise: Hyperspace').properties;
+    for (const name of ['towelwise.hyperspace.hideCommandCenter', 'towelwise.hyperspace.hideLayoutControls']) {
+      assert.strictEqual(props[name].type, 'boolean');
+      assert.strictEqual(props[name].default, true);
+      assert.strictEqual(props[name].scope, undefined);
+    }
+  });
 });

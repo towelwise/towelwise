@@ -34,6 +34,8 @@ const CHROME = [
   { option: 'hideActivityBar', key: 'workbench.activityBar.location', hidden: 'hidden' },
   { option: 'hideStatusBar', key: 'workbench.statusBar.visible', hidden: false },
   { option: 'hideMenuBar', key: 'window.menuBarVisibility', hidden: 'hidden' },
+  { option: 'hideCommandCenter', key: 'window.commandCenter', hidden: false },
+  { option: 'hideLayoutControls', key: 'workbench.layoutControl.enabled', hidden: false },
 ];
 
 // Close commands are no-ops on an area that is already closed, so they never open anything.
