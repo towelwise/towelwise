@@ -9,14 +9,14 @@ The first committed core patch, as planned in [decision 0005](../../docs/decisio
 ## Acceptance criteria
 
 1. **The build carries the patch.** `ide/build.sh` copies `ide/patches/*.patch` into the VSCodium checkout's `patches/user/` after its reset and clean steps and before VSCodium prepares the source. The patch applies cleanly to the pinned release, the app builds and launches, and the built workbench contains the hook. (The same hook that the dropped layout-mode spike proved; the build step was never committed.)
-2. **A hide list in a setting.** The built-in extension contributes `towelwise.menus.hidden`, a list of command ids at application scope, with a default that covers the integrated terminal and Tasks. An entry is an exact command id, or a prefix ending in `*` (for example `workbench.action.terminal.*`).
-3. **Hidden everywhere the person can reach it.** A command on the list no longer appears in the top menus, the Command Palette or the right-click menus, and its default keyboard shortcuts no longer fire. In the default setup this includes the terminal's New Terminal, Toggle Terminal and the Ctrl+Backquote shortcuts, and the Tasks entries.
+2. **A hide list in a setting.** The built-in extension contributes `towelwise.menus.hidden`, a list of command ids at application scope, with a default that covers the integrated terminal and Tasks. An entry is an exact command id, or a prefix ending in `*` (for example `workbench.action.terminal.*`). The default must include the three editor-terminal commands that sit outside that prefix: `workbench.action.createTerminalEditor`, `workbench.action.createTerminalEditorSide` and `workbench.action.createTerminalEditorSameGroup` (found in review: the first two are in the Command Palette, the third is an editor-title action).
+3. **Hidden everywhere the person can reach it, for workbench commands.** A workbench command on the list no longer appears in the top menus, the Command Palette or the right-click menus, including as an alternate (`alt`) menu action, and its default keyboard shortcuts no longer fire. In the default setup this includes the terminal's New Terminal, the three editor-terminal commands, Toggle Terminal and the Ctrl+Backquote shortcuts, and the Tasks entries. **The promise is deliberately narrower for editor actions** (owner, 2026-11-02): the Command Palette also lists actions read straight from the active editor (for example `editor.action.commentLine`), by a path that does not go through the menu registry. Listing such an id hides its menu items and shortcuts but not its palette entry. Nothing in this slice needs them hidden; a later slice (Debug has some editor actions) can add that path when it is needed.
 4. **Hiding is not disabling.** Hidden commands still run when other code calls them. Claude Code's optional terminal mode ("Claude Code: Open in Terminal") and any extension that calls the terminal API keep working.
-5. **The list takes effect without a rebuild.** Editing the setting changes what is hidden, live, or at worst after a window reload; the person can empty the list to bring everything back.
-6. **A Towelwise menu.** A new top-level **Towelwise** menu appears in the menu bar, between existing menus and not replacing any. It holds Jump to Hyperspace, Edit Hyperspace Layout, Choose Layout, Restore Layout, then a separator, then the external shell entries that are installed (PowerShell, PowerShell (Admin), Command Prompt, Command Prompt (Admin), Git Bash, and PowerShell 7 and WSL only when installed). Each entry runs its command. The menu's contents come from a second setting contributed by the built-in extension, not from the patch.
+5. **The list takes effect without a rebuild.** Editing the setting changes what is hidden, live, or at worst after a window reload (the spike records which, because live needs the menus and the keybinding resolver to be told to rebuild); the person can empty the list to bring everything back. At startup, filtering applies before any menu or keybinding result is cached from the unfiltered state.
+6. **A Towelwise menu.** A new top-level **Towelwise** menu appears in the menu bar, between existing menus and not replacing any. It holds Jump to Hyperspace, Edit Hyperspace Layout, Choose Layout, Restore Layout, then a separator, then the external shell entries that are installed (PowerShell, PowerShell (Admin), Command Prompt, Command Prompt (Admin), Git Bash, and PowerShell 7 and WSL only when installed). Each entry runs its command. The menu's contents come from a second setting contributed by the built-in extension, not from the patch, in the shape given under "The menu-entries contract" below. The menu's title uses the workbench's structured title form (with a mnemonic), because the custom menu bar ignores a plain string.
 7. **The Terminal menu goes.** With the default list, the top-level Terminal menu no longer shows. If the menu bar leaves an empty one visible, the spike records it and hides it with the same hook.
-8. **The Terminal panel tab.** The Terminal tab no longer shows in the bottom panel's tab strip, while the integrated terminal remains usable by code (an extension creating a terminal still gets one). If hiding the tab cannot be done without breaking that, the spike leaves the tab, records the reason, and this criterion is met by that finding.
-9. **A small patch with a note.** The patch is new files plus the smallest edit to the shared menu registry and keybinding path, with its size recorded and a note kept with it (why it exists, what it touches, how it re-applied on each upstream update, with the time taken), as 0005 requires.
+8. **The Terminal panel tab.** The Terminal tab no longer shows in the bottom panel's tab strip, while the integrated terminal remains usable by code (an extension creating a terminal still gets one). If hiding the tab cannot be done without breaking that, the spike leaves the tab, records the reason, and this criterion is met by that finding. "Usable" is tested in both places: a terminal created in the bottom panel and then shown (`terminal.show()`), and a terminal created in the editor area. Merely creating the object does not count. At the pinned source, hiding the tab means giving the terminal view a false `when`, which makes the view inactive, and showing an inactive view returns nothing, so a panel terminal's `show()` may stop working; the spike must find out.
+9. **A small patch with a note.** The patch is new files plus the smallest edits to the shared menu registry and keybinding path (filtering the final result after implicit items are added), with its size recorded and a note kept with it (why it exists, what it touches, how it re-applied on each upstream update, with the time taken), as 0005 requires.
 10. Hyperspace, the picker, Choose Layout, Restore Layout and the shell commands behave as before. Root `npm run lint`, `npm run build`, `npm test` and `npm run package` exit 0, and CI passes on the PR.
 
 ## Approved decisions (owner, 2026-11-02)
@@ -28,29 +28,46 @@ The first committed core patch, as planned in [decision 0005](../../docs/decisio
 - The spike covers everything: menus, palette, shortcuts and the panel tab, plus adding our own entries.
 - A separate top-level Towelwise menu, not a renamed Terminal menu.
 - Test boundary (owner, 2026-11-02): automated tests on the extension side; the patch checked by a type-check, a forward `git apply` on a clean file, the build, and the owner's look at the built app.
+- The hide list's promise covers workbench commands in menus, the palette and shortcuts; editor actions read from the active editor are out of this slice (owner, 2026-11-02, after Codex's review).
+
+## The menu-entries contract (a proposal for the owner to approve)
+
+`towelwise.menus.towelwise` is an array of objects, in display order, so the extension that writes it and the patch that reads it agree on one shape:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `command` | string, required | A command id. Runs when the entry is chosen. |
+| `title` | string, required | The text shown, with an optional `&` before the letter to use as the mnemonic. |
+| `group` | string, optional | Entries with the same group are shown together; a change of group draws a separator. Default: the previous entry's group. |
+| `when` | string, optional | A context-key expression, such as `towelwise.shell.available.gitbash`. The entry shows only while it is true. Default: always. |
+
+Malformed entries (not an object, no `command` or `title`, a non-string field, an expression that does not parse) are skipped, and one warning is logged naming the position; the rest still show. Unknown fields are ignored. The manifest contributes a JSON schema for this setting, so the settings editor also checks what the person types. Order is the array order; the menu's position in the menu bar and its title are fixed by the patch.
 
 ## Verification
 
 - **Automated (the extension's tests, same seam as the others):**
-  - The manifest contributes `towelwise.menus.hidden` with scope `application`, a list type, and a default that contains the terminal and Tasks patterns; and the menu-entries setting with the entries in criterion 6.
+  - The manifest contributes `towelwise.menus.hidden` with scope `application`, a list type, and a default that contains the terminal pattern, the three editor-terminal ids, and the Tasks pattern; and the menu-entries setting with the entries in criterion 6.
+  - The menu-entries default validates against the contract above (every entry has a string `command` and `title`, and any `group` and `when` are strings), and the manifest's schema for the setting matches the contract; a validator for the contract lives in the extension and is tested with good entries and with each kind of malformed entry.
   - Every command id in the menu-entries default is a command the extension registers or contributes, so the menu cannot point at nothing.
-  - The shell entries in the menu-entries default carry the same availability gating as their palette entries.
+  - The shell entries in the menu-entries default carry the same availability gating (`when`) as their palette entries, and each `when` names a context key the extension sets.
   - No default keybinding for a Towelwise menu command is added.
 - **Patch checks (not unit-testable):** a type-check of the VS Code tree with zero errors in our files; `git apply --check` forward on a clean copy of each touched file, reproducing our files; the full build exits 0 and the built bundle contains the hook.
 - **Build and package:** the four root commands.
 - **Manual (the owner, built app):**
   - The menu bar shows Towelwise and no Terminal menu; every Towelwise entry runs; the shell entries appear only for installed shells.
-  - Search the Command Palette for "Terminal:" and "Tasks:": the hidden ones are gone. Press Ctrl+Backquote: nothing happens.
+  - Search the Command Palette for "Terminal:" and "Tasks:": the hidden ones are gone, including "Create New Terminal in Editor Area" and "...to the Side". Press Ctrl+Backquote: nothing happens.
   - Look at the bottom panel's tabs for Terminal (criterion 8, with the outcome recorded either way).
-  - Run "Claude Code: Open in Terminal": it still opens its terminal and runs.
-  - Empty `towelwise.menus.hidden` and confirm everything returns; put a pattern back and confirm it is hidden again.
+  - Run "Claude Code: Open in Terminal": it still opens its terminal and runs. If the tab was hidden, also check a terminal in the bottom panel can be created and shown by an extension, as well as one in the editor area.
+  - Empty `towelwise.menus.hidden` and confirm everything returns; put a pattern back and confirm it is hidden again. Record whether this takes effect live or after a reload.
+  - Edit `towelwise.menus.towelwise` (change a title, move an entry to another group, delete one, add one with a mistake in it): the Towelwise menu follows, the bad entry is skipped, and a warning appears in the log. Record whether this takes effect live or after a reload.
 
 ## Implementer defaults (not approved; flag in review)
 
-- Setting names `towelwise.menus.hidden` and `towelwise.menus.towelwise`, and the default hide list: `workbench.action.terminal.*` and `workbench.action.tasks.*`, plus the Tasks entries in the Terminal menu by their command ids.
+- Setting names `towelwise.menus.hidden` and `towelwise.menus.towelwise`, and the default hide list: `workbench.action.terminal.*`, `workbench.action.createTerminalEditor`, `workbench.action.createTerminalEditorSide`, `workbench.action.createTerminalEditorSameGroup`, `workbench.action.tasks.*`, plus the Tasks entries in the Terminal menu by their command ids.
 - Pattern syntax: exact id, or a trailing `*` for a prefix; nothing more.
+- The menu-entries contract above, including skipping malformed entries with a logged warning.
 - The Towelwise menu's contents and order (Hyperspace group, Layout group, then Shells), and its position in the menu bar.
-- The patch is a new workbench contribution file, an edit to the menu registry's `getMenuItems` and the keybinding default list to filter by the list, and one registration line, as in the layout-mode spike.
+- The patch is a new workbench contribution file, edits to the menu registry (filter the final result of `getMenuItems`, after implicit items are added) and to the keybinding default list, and one registration line, as in the layout-mode spike. Hiding the Terminal tab may need a separate small edit to the terminal view's `when`, so the four-file shape is an estimate, not a promise; the actual files and size are recorded after the spike.
 - Entries run existing command ids; no new commands are added by the patch.
 - macOS native menus are not handled (Windows first).
 
@@ -59,6 +76,7 @@ The first committed core patch, as planned in [decision 0005](../../docs/decisio
 - Hiding Debug, Testing and Notebooks (the same hook, a later slice), and any removal of code.
 - The Chat view and the Agents entry; Windows Terminal as an entry; a pass over the built-in extensions.
 - Native macOS and Linux menus; keyboard shortcut editing beyond removing defaults for hidden commands.
+- Hiding editor actions from the Command Palette (the palette reads them from the active editor, not the menu registry); needed later for Debug.
 - Changing the integrated terminal itself.
 
 ## Unresolved / external prerequisites
