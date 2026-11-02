@@ -177,6 +177,69 @@ Offered further down the road, after Hyperspace, Recall and Learning. It's comin
 
 ---
 
+## Strip-down candidates (draft for the owner's review, 2026-11-02)
+
+Nothing here is decided. The idea: Towelwise AI is meant to be a slim IDE for AI agent development that is friendly to newcomers, so look at what Code-OSS ships that the product does not need, and decide area by area.
+
+**How to weigh each one**
+
+- **Do the agents need it?** The agents decide this first. If Claude Code or Codex depend on an area, it stays.
+- **Hide before delete.** Every upstream release has to be re-based onto our changes ([0004](../docs/decisions/0004-towelwise-ai-is-an-ide-built-from-code-oss-patches.md)). Hiding the way in (menus, shortcuts, panel tabs, default settings) costs little and can be undone. Deleting code touches every file that imports it, and each of those can break on an update.
+- **Built-in extensions are cheaper than core code.** Code-OSS bundles 107 extensions (language grammars, Git, GitHub sign-in, Emmet, and so on). Leaving one out of the build is a file removal in `ide/build.sh`, not a patch of core code. Some depend on each other, so each needs checking.
+- **Newcomers are a separate question from the owner's habits.** The owner runs terminal commands outside the IDE; a newcomer told by an agent to "run this command" may want to do it inside. That is a product choice, not something the code answers.
+
+**The terminal, as the worked example**
+
+- Claude Code starts its own `claude` process for the chat panel. It uses an IDE terminal only in an optional mode (`claudeCode.useTerminal`, and a command "Claude Code: Open in Terminal"). Losing the terminal would lose that mode.
+- Codex has no terminal settings or commands in its manifest and runs its own `app-server` program. It does contain a helper that creates terminals; when it is used was not worked out.
+- Read from the code only. Neither agent was run with the terminal removed, which is the real test.
+- In VS Code itself, the terminal is used by Tasks, by the debugger's "run in terminal" option, by language extensions that offer "Run file", and by any extension that creates a terminal.
+
+**Candidates**
+
+Sizes are source-code size in the pinned Code-OSS, not the installed app. "Outside importers" counts source files elsewhere that import the area, found by a simple search; it varies by about a factor of two with how you search, so read it as rough tangle, not a precise count.
+
+| Area | What it is | Source size | Outside importers | Do the agents need it? | Cheapest first step |
+|---|---|---|---|---|---|
+| Terminal | The integrated terminal and its panel | 2.5 MB, 85 files | about 24 to 43 | Not for the chat panels (see above); Codex's helper not confirmed | Hide the entry points; try it for a week |
+| Tasks | Run Task, `tasks.json`, build tasks | 0.7 MB, 21 files | about 8 | Not examined | **Decided: hide** (owner, 2026-11-02: agents run these for newcomers) |
+| Debug | The debugger and its views | 2.2 MB, 77 files | about 18 | Not examined | **Decided: hide** (same reason) |
+| Testing | The Testing view and test runners | 1.1 MB, 57 files | about 9 | Not examined | **Decided: hide** (same reason) |
+| Built-in chat | VS Code's own AI chat views and services | 19.5 MB, 904 files | about 99 | Not examined; separate from the Claude and Codex panels, which are their own extensions | Find which parts are still active in the VSCodium build; hide, do not delete |
+| Notebooks | Jupyter-style notebooks and their editors | 4.6 MB, 203 files | about 47 | Not examined | **Decided: hide**; keep the code (owner, 2026-11-02) |
+| Source Control | The Git view, diffs, commits | 0.7 MB, 26 files | about 12 | Not examined | **Decided: keep as is.** The owner says it matters even to newcomers (2026-11-02) |
+| Remote | Remote and container workspaces | 0.3 MB, 15 files | about 30 | Not examined | Hide the entry points |
+| MCP | Model Context Protocol servers view | 1.6 MB, 71 files | about 11 | Likely relevant to agents (not checked) | **Decided: keep.** The owner expects to rely on it later (2026-11-02) |
+| Problems, Timeline, Outline, Comments, Search | Smaller side views | each under 1 MB | 1 to 16 | Not examined | Look at once the bigger ones are settled |
+| Built-in extensions | 107 bundled extensions | not measured | not applicable | Not examined | List them with what each gives a newcomer; leave out the ones with no use |
+
+**What would settle it**
+
+- Run Towelwise AI for about a week with a chosen set hidden (settings and menus only, no patch) and record what was missed.
+- For each area marked "not examined", check whether Claude Code or Codex uses it, by reading their manifests and, where unclear, running them with it off.
+- Decide the newcomer question for the terminal and Source Control first, since they are the two with the clearest value to a person new to agent work.
+
+**Decided so far (owner, 2026-11-02):** hide Tasks, Debug, Testing and Notebooks; keep MCP; keep Source Control as is. Hiding means the way in is hidden and the code stays. How hiding is done has not been designed.
+
+**Terminal, decided (owner, 2026-11-02):** keep the integrated terminal and hide its user entry points (menu items, panel tab, shortcut, palette commands). In their place, entries that open shells in a normal window outside the IDE, each starting in the project folder: PowerShell and PowerShell (Admin), Command Prompt and Command Prompt (Admin). Further entries approved: Git Bash, and PowerShell 7 and WSL only when installed (WSL needs a Linux distro installed; the owner has WSL without one). Windows Terminal is a window that can host these shells in tabs, not a shell itself; whether to offer it as an entry or as the place the entries open is still open. Only installed shells show, and the list would be editable. Admin entries use Windows' own permission prompt; no elevated shell lives inside the IDE. The entries can be Command Palette commands from the built-in extension with no patch; placing them in the top Terminal menu and hiding the integrated terminal's own entries needs a core patch. How patches are decided is in [0005](../docs/decisions/0005-patch-core-only-when-the-extension-cannot.md) (approved).
+
+**Terminal: ideas and facts to weigh**
+
+- The integrated terminal runs a real shell (Windows ConPTY through `node-pty`) as a child of the IDE, so it has the IDE's own permissions: not sandboxed, but also not elevated unless the whole IDE was started as administrator. Each terminal gets IDE variables injected (such as `VSCODE_INJECTION`).
+- VS Code already has "Open New External Terminal" (`workbench.action.terminal.openNativeConsole`) and a setting for which Windows terminal it opens (`terminal.external.windowsExec`). That opens a normal window outside the IDE. It has no elevated option.
+- An elevated terminal could be a command in the built-in extension that launches PowerShell or Command Prompt "as administrator", which shows Windows' own permission prompt. That needs no core patch. Putting an elevated shell inside the IDE would need an elevated helper process talking to the IDE, which creates a security risk, so an external window is the safer shape. Windows first.
+- The owner's idea of a terminal module that can be added to hyperspace is noted and not designed.
+
+**Chat: facts to weigh**
+
+- Claude Code and Codex each already have their own views, separate from VS Code's Chat view: Claude has two activity-bar containers and one in the secondary side bar; Codex has an activity-bar container and one in the secondary side bar. Choose Layout already restores these.
+- Codex also registers itself in the built-in Chat view's session list (its manifest declares a chat session type, `openai-codex`). Claude Code's manifest declares none; how it shows up in the Chat picker was not found and may be done in code.
+- So the agents do not depend on the Chat view to exist. Hiding the Chat view would remove the shared picker and VS Code's own native chat, not the agents. A Towelwise-owned "Agents" entry that lists installed agents and opens each in its own view could be built in the built-in extension, from the commands Choose Layout already uses, with no core patch. Nothing has been designed.
+
+**Still open for the owner:** the terminal for newcomers (stay, hide, or the external-and-elevated idea); the Chat view (hide, replace with an Agents entry, or leave); whether hiding is enough or some areas should eventually be deleted; and whether built-in extensions get their own pass.
+
+---
+
 ## Open questions, by when they need an answer
 
 | Question | Needed by |
