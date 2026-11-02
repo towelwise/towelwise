@@ -21,7 +21,15 @@ Each patch has a note below: why it exists, what it touches, and how it fared at
 
 **Known limits.** Editor actions that the Command Palette reads straight from the active editor are not covered. Typing `term ` in quick open still opens the terminal picker. The built-in JavaScript Debug extension adds its own terminal command.
 
-## Dropped: hiding the Terminal tab (was `0002`)
+## 0002 welcome header (`0002-towelwise-welcome-header.patch`)
+
+**Why.** The Welcome page showed VSCodium's subtitle "Editing evolved" and no mark. The subtitle is a string in core code, so an extension cannot change it. The owner chose "Coding Gone Hyper", a nod to Hyperspace mode (a first idea that quoted a film was dropped to stay clear of a studio's property).
+
+**What it touches (2 files, one hunk each; +12/-1 lines).** `welcomeGettingStarted/browser/gettingStarted.ts`: the subtitle text. `welcomeGettingStarted/browser/media/gettingStarted.css`: a `::before` rule that draws the Towelwise mark before the product name. The mark itself is a file overlay, not part of the patch: `ide/build.sh` copies `ide/icons/code-icon.svg` to `towelwise-mark.svg` beside that stylesheet. The faint mark in an empty editor is likewise a file overlay (`ide/icons/letterpress/*.svg` over the four `letterpress-*.svg` files).
+
+**Known limits.** The subtitle keeps its original localization key, so a translated build would still show the translation of "Editing evolved"; Towelwise ships in English only for now. VSCodium already edits `gettingStarted.ts`; this patch is made against the file as VSCodium leaves it and applies after theirs.
+
+## Dropped: hiding the Terminal tab (an earlier patch, also numbered `0002`)
 
 The first version had a second patch giving the Terminal view in the bottom panel a `when` that went false while Toggle Terminal was hidden, so the tab disappeared. Review of the pinned source (2026-11-02) showed that a view whose `when` is false is inactive, and `ViewsService.openView` returns nothing for an inactive view, so a terminal created in the bottom panel by an extension (`MainThreadTerminalService.$show` to `TerminalGroupService.showPanel`) could no longer be shown. Terminals in the editor area (such as Claude Code's terminal mode) were not affected, but the panel case could not be accepted. The spec's criterion 8 allowed this fallback, so the patch was dropped and the Terminal tab stays. Anyone who wants it gone can hide it from the panel's tab menu. Deleting a file from `ide/patches/` is all it took: the build copies whatever is there.
 
@@ -29,4 +37,5 @@ The first version had a second patch giving the Terminal view in the bottom pane
 
 | Upstream version | Patch | Applied cleanly? | What had to change | Time |
 |---|---|---|---|---|
+| VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0002 | Forward `git apply --check` on the file as VSCodium leaves it: yes. Not yet in a full build | Nothing; first version | About 1 hour |
 | VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0001 | Yes: applied in four full builds (about 14 minutes each) and by forward `git apply` on pristine files and on the registration file as VSCodium edits it | Nothing from upstream; first version. Found in use and fixed in the patch: a first-launch timing bug, a missing hide pattern (`terminal.integrated.*`), and, from review, repeated groups reordering the menu and an all-conditional menu that stayed absent | Spike about 3 hours including four builds |

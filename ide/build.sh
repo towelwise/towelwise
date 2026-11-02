@@ -55,6 +55,13 @@ if compgen -G "${IDE_DIR}/patches/*.patch" > /dev/null; then
 fi
 # The small logo at the left of the title bar.
 cp "${IDE_DIR}/icons/code-icon.svg" src/stable/src/vs/workbench/browser/media/code-icon.svg
+# The faint mark in an empty editor replaces VSCodium's (the same four file names, one per theme kind).
+mkdir -p src/stable/src/vs/workbench/browser/parts/editor/media
+cp "${IDE_DIR}"/icons/letterpress/*.svg src/stable/src/vs/workbench/browser/parts/editor/media/
+
+# The mark beside the product name on the Welcome page (patch 0002 points the page at it).
+mkdir -p src/stable/src/vs/workbench/contrib/welcomeGettingStarted/browser/media
+cp "${IDE_DIR}/icons/code-icon.svg" src/stable/src/vs/workbench/contrib/welcomeGettingStarted/browser/media/towelwise-mark.svg
 
 # 4. Same settings as VSCodium's dev/build.sh, with our naming.
 export APP_NAME="Towelwise AI"
