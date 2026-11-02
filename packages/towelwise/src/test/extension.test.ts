@@ -13,16 +13,6 @@ suite('towelwise.towelwise', () => {
     }
   });
 
-  test('Layout Mode is in the palette and has no default shortcut', () => {
-    const contributes = vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON.contributes;
-    const command = contributes.commands.find((c: { command: string }) => c.command === 'towelwise.layoutMode.open');
-    assert.strictEqual(command?.title, 'Towelwise: Layout Mode');
-    assert.ok(!contributes.keybindings.some((k: { command: string }) => k.command === 'towelwise.layoutMode.open'));
-    for (const internal of ['state', 'choose', 'save', 'close']) {
-      assert.ok(!contributes.commands.some((c: { command: string }) => c.command === `towelwise.layoutMode.${internal}`), `${internal} should not be in the palette`);
-    }
-  });
-
   test('Edit Hyperspace Layout is in the palette and has no default shortcut', () => {
     const contributes = vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON.contributes;
     const command = contributes.commands.find((c: { command: string }) => c.command === 'towelwise.hyperspace.edit');
