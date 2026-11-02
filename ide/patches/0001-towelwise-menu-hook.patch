@@ -57,10 +57,10 @@ index f54769f2..8f200cc6 100644
  	private _appendImplicitItems(result: Array<IMenuItem | ISubmenuItem>) {
 diff --git a/src/vs/platform/commands/common/hiddenCommands.ts b/src/vs/platform/commands/common/hiddenCommands.ts
 new file mode 100644
-index 00000000..f875e417
+index 00000000..e9171a78
 --- /dev/null
 +++ b/src/vs/platform/commands/common/hiddenCommands.ts
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,49 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Towelwise AI: commands hidden from menus, the Command Palette and default keyboard shortcuts.
 + *
@@ -78,6 +78,7 @@ index 00000000..f875e417
 +	'workbench.action.createTerminalEditorSide',
 +	'workbench.action.createTerminalEditorSameGroup',
 +	'workbench.action.quickOpenTerm',
++	'terminal.integrated.*',
 +	'workbench.action.tasks.*',
 +];
 +
@@ -141,10 +142,10 @@ index 0d95d0bf..ab88c80f 100644
  			if (actualKb && actualKb.primary) {
 diff --git a/src/vs/workbench/contrib/towelwise/browser/towelwise.contribution.ts b/src/vs/workbench/contrib/towelwise/browser/towelwise.contribution.ts
 new file mode 100644
-index 00000000..d95bde19
+index 00000000..cd44116c
 --- /dev/null
 +++ b/src/vs/workbench/contrib/towelwise/browser/towelwise.contribution.ts
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,153 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Towelwise AI: the hide list and the Towelwise menu, both read from settings that the built-in Towelwise
 + *  extension ships. The settings are the whole interface: this file holds no list of its own beyond the
@@ -158,6 +159,7 @@ index 00000000..d95bde19
 +import { ContextKeyExpr, ContextKeyExpression, IContextKey, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 +import { ILogService } from '../../../../platform/log/common/log.js';
 +import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
++import { IExtensionService } from '../../../services/extensions/common/extensions.js';
 +
 +const HIDDEN_SETTING = 'towelwise.menus.hidden';
 +const MENU_SETTING = 'towelwise.menus.towelwise';
@@ -187,16 +189,10 @@ index 00000000..d95bde19
 +		@IConfigurationService private readonly configurationService: IConfigurationService,
 +		@IContextKeyService contextKeyService: IContextKeyService,
 +		@ILogService private readonly logService: ILogService,
++		@IExtensionService extensionService: IExtensionService,
 +	) {
 +		super();
 +		this.terminalTabHidden = TERMINAL_TAB_HIDDEN.bindTo(contextKeyService);
-+
-+		// The Towelwise menu sits between Terminal and Help in the menu bar. The mnemonic is the W, since T is Terminal's.
-+		this._register(MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
-+			submenu: MenubarTowelwiseMenu,
-+			title: { value: 'Towelwise', original: 'Towelwise', mnemonicTitle: 'To&&welwise' },
-+			order: 7.5
-+		}));
 +
 +		this.applyHidden();
 +		this.applyMenu();
@@ -208,6 +204,12 @@ index 00000000..d95bde19
 +				this.applyMenu();
 +			}
 +		}));
++		// On a first launch this runs before the built-in extension has registered its settings, so they read as
++		// missing and a change event is not guaranteed to follow. Read them again once extensions are registered.
++		extensionService.whenInstalledExtensionsRegistered().then(() => {
++			this.applyHidden();
++			this.applyMenu();
++		});
 +		this._register(HiddenCommands.onDidChange(() => this.terminalTabHidden.set(HiddenCommands.isHidden(TOGGLE_TERMINAL))));
 +		this.terminalTabHidden.set(HiddenCommands.isHidden(TOGGLE_TERMINAL));
 +	}
@@ -254,6 +256,17 @@ index 00000000..d95bde19
 +				order
 +			}));
 +		});
++
++		// The menu bar only redraws when its main menu changes, not when a submenu gains entries, so the
++		// top-level item is added last, after its entries, and again on every rebuild. It sits between Terminal and
++		// Help; the mnemonic is the W, since T is Terminal's. With no entries there is no menu.
++		if (entries.length > 0) {
++			this.menuItems.add(MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
++				submenu: MenubarTowelwiseMenu,
++				title: { value: 'Towelwise', original: 'Towelwise', mnemonicTitle: 'To&&welwise' },
++				order: 7.5
++			}));
++		}
 +	}
 +
 +	private readEntry(item: unknown, position: number, previousGroup: string | undefined): MenuEntry | undefined {

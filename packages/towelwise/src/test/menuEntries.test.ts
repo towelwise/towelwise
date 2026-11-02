@@ -12,6 +12,7 @@ const HIDDEN_DEFAULT = [
   'workbench.action.createTerminalEditorSide',
   'workbench.action.createTerminalEditorSameGroup',
   'workbench.action.quickOpenTerm',
+  'terminal.integrated.*',
   'workbench.action.tasks.*',
 ];
 

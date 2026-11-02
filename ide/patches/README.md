@@ -16,7 +16,7 @@ Each patch has a note below: why it exists, what it touches, and how it fared at
 - `platform/actions/common/actions.ts`: `MenuRegistry.getMenuItems` returns its result without hidden commands, after the implicit Command Palette items are added, and drops hidden alternate actions; menus rebuild when the list changes.
 - `platform/keybinding/common/keybindingsRegistry.ts`: default shortcuts of hidden commands are left out (removal rules and user shortcuts are untouched).
 - `workbench/services/keybinding/browser/keybindingService.ts`: rebuilds the resolver when the list changes.
-- new `workbench/contrib/towelwise/browser/towelwise.contribution.ts`: reads both settings, applies the list, builds the Towelwise menu (entries keep array order; groups separate sections), sets the context key `towelwise.terminalTabHidden`.
+- new `workbench/contrib/towelwise/browser/towelwise.contribution.ts`: reads both settings, applies the list, builds the Towelwise menu (entries keep array order; groups separate sections), sets the context key `towelwise.terminalTabHidden`. It reads the settings again once extensions have registered, because on a first launch it runs before the built-in extension's settings exist. It adds the top-level Towelwise item last, after its entries, and again on every rebuild: the menu bar redraws only when its main menu changes, not when a submenu gains entries, so an item registered first and filled later never appeared (until a window reload).
 - `workbench/workbench.common.main.ts`: one import, added at the end of the imports, away from the block VSCodium edits.
 
 **Known limits.** Editor actions that the Command Palette reads straight from the active editor are not covered. Typing `term ` in quick open still opens the terminal picker. The built-in JavaScript Debug extension adds its own terminal command.
@@ -33,4 +33,4 @@ Each patch has a note below: why it exists, what it touches, and how it fared at
 
 | Upstream version | Patch | Applied cleanly? | What had to change | Time |
 |---|---|---|---|---|
-| VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0001, 0002 | Yes, forward `git apply` on pristine files and on the registration file as VSCodium edits it | Nothing; first version | Not yet built into an app |
+| VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0001, 0002 | Yes: applied during the full build (about 14 minutes) and by forward `git apply` on pristine files and on the registration file as VSCodium edits it | Nothing; first version. A first-launch timing bug and one missing hide pattern (`terminal.integrated.*`) were found in the first built-app check and fixed in 0001 | Spike about 2 hours including two builds |
