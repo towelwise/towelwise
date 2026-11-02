@@ -24,8 +24,10 @@ src = source.load()
 
 
 def distance(x, y):
+    # How far the brightest channel is ABOVE the background. Anti-aliasing can leave edge pixels a little
+    # darker than the background (an undershoot); those count as background, not as figure, so no grey speckle.
     r, g, b, _ = src[x, y]
-    return max(abs(r - bg[0]), abs(g - bg[1]), abs(b - bg[2]))
+    return max(r - bg[0], g - bg[1], b - bg[2])
 
 
 outside = set()
