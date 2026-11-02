@@ -142,31 +142,27 @@ index 0d95d0bf..ab88c80f 100644
  			if (actualKb && actualKb.primary) {
 diff --git a/src/vs/workbench/contrib/towelwise/browser/towelwise.contribution.ts b/src/vs/workbench/contrib/towelwise/browser/towelwise.contribution.ts
 new file mode 100644
-index 00000000..cd44116c
+index 00000000..a48f85d4
 --- /dev/null
 +++ b/src/vs/workbench/contrib/towelwise/browser/towelwise.contribution.ts
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,176 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Towelwise AI: the hide list and the Towelwise menu, both read from settings that the built-in Towelwise
 + *  extension ships. The settings are the whole interface: this file holds no list of its own beyond the
 + *  startup default in hiddenCommands.ts, and no menu contents.
 + *--------------------------------------------------------------------------------------------*/
 +
-+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
++import { Disposable, DisposableStore, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 +import { HiddenCommands } from '../../../../platform/commands/common/hiddenCommands.js';
 +import { MenuId, MenuRegistry } from '../../../../platform/actions/common/actions.js';
 +import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-+import { ContextKeyExpr, ContextKeyExpression, IContextKey, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
++import { ContextKeyExpr, ContextKeyExpression, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 +import { ILogService } from '../../../../platform/log/common/log.js';
 +import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 +import { IExtensionService } from '../../../services/extensions/common/extensions.js';
 +
 +const HIDDEN_SETTING = 'towelwise.menus.hidden';
 +const MENU_SETTING = 'towelwise.menus.towelwise';
-+
-+// The Terminal tab in the bottom panel shows only while the Toggle Terminal command is not hidden.
-+const TERMINAL_TAB_HIDDEN = new RawContextKey<boolean>('towelwise.terminalTabHidden', false);
-+const TOGGLE_TERMINAL = 'workbench.action.terminal.toggleTerminal';
 +
 +const MenubarTowelwiseMenu = new MenuId('MenubarTowelwiseMenu');
 +
@@ -182,8 +178,12 @@ index 00000000..cd44116c
 +
 +	static readonly ID = 'workbench.contrib.towelwise';
 +
-+	private readonly terminalTabHidden: IContextKey<boolean>;
 +	private readonly menuItems = this._register(new DisposableStore());
++	// The top-level item is kept apart from the entries so it can be registered again on its own.
++	private readonly topLevel = this._register(new MutableDisposable<IDisposable>());
++	private hasEntries = false;
++	// The context keys the entries' conditions read, so the menu can be told when one of them changes.
++	private watchedKeys = new Set<string>();
 +
 +	constructor(
 +		@IConfigurationService private readonly configurationService: IConfigurationService,
@@ -192,7 +192,6 @@ index 00000000..cd44116c
 +		@IExtensionService extensionService: IExtensionService,
 +	) {
 +		super();
-+		this.terminalTabHidden = TERMINAL_TAB_HIDDEN.bindTo(contextKeyService);
 +
 +		this.applyHidden();
 +		this.applyMenu();
@@ -210,8 +209,14 @@ index 00000000..cd44116c
 +			this.applyHidden();
 +			this.applyMenu();
 +		});
-+		this._register(HiddenCommands.onDidChange(() => this.terminalTabHidden.set(HiddenCommands.isHidden(TOGGLE_TERMINAL))));
-+		this.terminalTabHidden.set(HiddenCommands.isHidden(TOGGLE_TERMINAL));
++		// The menu bar drops a submenu with nothing to show and does not watch the conditions of entries inside it,
++		// so a menu whose entries were all hidden would never come back when one became true. Register the
++		// top-level item again whenever a condition one of the entries reads changes.
++		this._register(contextKeyService.onDidChangeContext(e => {
++			if (this.hasEntries && this.watchedKeys.size > 0 && e.affectsSome(this.watchedKeys)) {
++				this.registerTopLevel();
++			}
++		}));
 +	}
 +
 +	private applyHidden(): void {
@@ -224,11 +229,14 @@ index 00000000..cd44116c
 +	// Rebuilds the whole menu from the setting. Entries with a mistake are skipped and named in the log.
 +	private applyMenu(): void {
 +		this.menuItems.clear();
++		this.hasEntries = false;
++		this.watchedKeys = new Set();
 +		const raw = this.configurationService.getValue<unknown>(MENU_SETTING);
 +		if (!Array.isArray(raw)) {
 +			if (raw !== undefined) {
 +				this.logService.warn(`[towelwise] ${MENU_SETTING} must be a list of entries; the menu is empty`);
 +			}
++			this.registerTopLevel();
 +			return;
 +		}
 +
@@ -240,33 +248,48 @@ index 00000000..cd44116c
 +			}
 +		});
 +
-+		// Groups keep the order they first appear in, and entries keep the array order: both are given explicitly,
-+		// because the menu would otherwise sort them by name.
-+		const groupNumber = new Map<string, number>();
++		// Entries keep the array order, and the menu would otherwise sort them by name, so each gets an explicit order.
++		// A group name that comes back after another group is a new section, not a return to the first one, or the
++		// menu would rearrange what was typed: sections are counted by runs, as the extension's placeEntries does.
++		let section = -1;
++		let previousGroup: string | undefined;
 +		entries.forEach((entry, order) => {
-+			if (!groupNumber.has(entry.group)) {
-+				groupNumber.set(entry.group, groupNumber.size);
++			if (entry.group !== previousGroup) {
++				section++;
++				previousGroup = entry.group;
 +			}
 +			// In the setting, one & marks the shortcut letter; the menu's own form uses two.
 +			const plain = entry.title.replace(/&(?!&)/g, '');
 +			this.menuItems.add(MenuRegistry.appendMenuItem(MenubarTowelwiseMenu, {
 +				command: { id: entry.command, title: { value: plain, original: plain, mnemonicTitle: entry.title.replace(/&(?!&)/g, '&&') } },
 +				when: entry.when,
-+				group: `${String(groupNumber.get(entry.group)).padStart(2, '0')}_${entry.group}`,
++				group: `${String(section).padStart(2, '0')}_${entry.group}`,
 +				order
 +			}));
++			if (entry.when) {
++				for (const key of entry.when.keys()) {
++					this.watchedKeys.add(key);
++				}
++			}
 +		});
 +
-+		// The menu bar only redraws when its main menu changes, not when a submenu gains entries, so the
-+		// top-level item is added last, after its entries, and again on every rebuild. It sits between Terminal and
-+		// Help; the mnemonic is the W, since T is Terminal's. With no entries there is no menu.
-+		if (entries.length > 0) {
-+			this.menuItems.add(MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
-+				submenu: MenubarTowelwiseMenu,
-+				title: { value: 'Towelwise', original: 'Towelwise', mnemonicTitle: 'To&&welwise' },
-+				order: 7.5
-+			}));
++		this.hasEntries = entries.length > 0;
++		this.registerTopLevel();
++	}
++
++	// The menu bar only redraws when its main menu changes, not when a submenu gains entries, so the top-level item is
++	// added after its entries, and again whenever they or their conditions change. It sits between Terminal and Help;
++	// the mnemonic is the W, since T is Terminal's. With no entries there is no menu.
++	private registerTopLevel(): void {
++		if (!this.hasEntries) {
++			this.topLevel.clear();
++			return;
 +		}
++		this.topLevel.value = MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
++			submenu: MenubarTowelwiseMenu,
++			title: { value: 'Towelwise', original: 'Towelwise', mnemonicTitle: 'To&&welwise' },
++			order: 7.5
++		});
 +	}
 +
 +	private readEntry(item: unknown, position: number, previousGroup: string | undefined): MenuEntry | undefined {

@@ -18,17 +18,66 @@ export interface Validated {
 
 const isText = (value: unknown): value is string => typeof value === 'string' && value.trim() !== '';
 
+// Quoted text and regular expressions are values, not syntax: a bracket or && inside them means nothing. They are
+// replaced by a placeholder so the checks below see only real operators and brackets.
+function withoutValues(when: string): string {
+  let out = '';
+  let i = 0;
+  while (i < when.length) {
+    const ch = when[i];
+    if (ch === "'" || ch === '"') {
+      i++;
+      while (i < when.length && when[i] !== ch) i += when[i] === '\\' ? 2 : 1;
+      i++;
+      out += 'x';
+    } else if (ch === '/' && /=~\s*$/.test(out)) {
+      i++;
+      while (i < when.length && when[i] !== '/') i += when[i] === '\\' ? 2 : 1;
+      i++;
+      while (/[a-z]/i.test(when[i] ?? '')) i++; // flags
+      out += 'x';
+    } else {
+      out += ch;
+      i++;
+    }
+  }
+  return out;
+}
+
 // A syntax check only, since the real parser lives in the workbench: balanced brackets and no && or || with
-// nothing on one side. It catches the mistakes people actually make when typing one.
+// nothing on one side. It catches the mistakes people actually make when typing one, and it does not reject
+// what the real parser accepts (the core skips an entry it cannot parse and logs it).
 export function looksLikeExpression(when: string): boolean {
   if (when.trim() === '') return false;
+  const syntax = withoutValues(when);
   let depth = 0;
-  for (const ch of when) {
+  for (const ch of syntax) {
     if (ch === '(') depth++;
     if (ch === ')' && --depth < 0) return false;
   }
   if (depth !== 0) return false;
-  return when.split(/&&|\|\|/).every((operand) => operand.trim() !== '');
+  return syntax.split(/&&|\|\|/).every((operand) => operand.trim() !== '');
+}
+
+export interface PlacedEntry extends MenuEntry {
+  // Which run of entries with the same group this one belongs to, counting from 0 in array order.
+  section: number;
+  // Its position in the array, which is its position in the menu.
+  order: number;
+}
+
+// Entries keep the array order. A group name that comes back after another group is a new section, not a
+// return to the first one, or the menu would quietly rearrange what was typed. The IDE patch applies the same rule.
+export function placeEntries(entries: readonly MenuEntry[]): PlacedEntry[] {
+  let section = -1;
+  let previous: string | undefined;
+  return entries.map((entry, order) => {
+    if (entry.group !== previous) {
+      section++;
+      previous = entry.group;
+    }
+    return { ...entry, section, order };
+  });
 }
 
 // One line per bad entry, so a typo in the setting is not silent. The entry is skipped; the rest still show.

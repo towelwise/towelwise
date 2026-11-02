@@ -10,27 +10,23 @@ Each patch has a note below: why it exists, what it touches, and how it fared at
 
 **What it does.** Two settings that the built-in extension ships are the whole interface: `towelwise.menus.hidden` (command ids or `prefix.*` patterns to hide) and `towelwise.menus.towelwise` (the entries of a new Towelwise menu). A hidden command is not offered in menus, the Command Palette or default shortcuts, but still runs when called by other code.
 
-**What it touches (6 files, one hunk or new file each).**
+**What it touches (6 files, one hunk or new file each; +240/-2 lines).**
 
 - new `platform/commands/common/hiddenCommands.ts`: the shared list, its matcher, and a startup default equal to the setting's default so nothing flashes before the setting is read.
 - `platform/actions/common/actions.ts`: `MenuRegistry.getMenuItems` returns its result without hidden commands, after the implicit Command Palette items are added, and drops hidden alternate actions; menus rebuild when the list changes.
 - `platform/keybinding/common/keybindingsRegistry.ts`: default shortcuts of hidden commands are left out (removal rules and user shortcuts are untouched).
 - `workbench/services/keybinding/browser/keybindingService.ts`: rebuilds the resolver when the list changes.
-- new `workbench/contrib/towelwise/browser/towelwise.contribution.ts`: reads both settings, applies the list, builds the Towelwise menu (entries keep array order; groups separate sections), sets the context key `towelwise.terminalTabHidden`. It reads the settings again once extensions have registered, because on a first launch it runs before the built-in extension's settings exist. It adds the top-level Towelwise item last, after its entries, and again on every rebuild: the menu bar redraws only when its main menu changes, not when a submenu gains entries, so an item registered first and filled later never appeared (until a window reload).
+- new `workbench/contrib/towelwise/browser/towelwise.contribution.ts`: reads both settings, applies the list and builds the Towelwise menu. Entries keep the array order, and a group name that comes back after another group is a new section (counted by runs, the same rule as `placeEntries` in the extension). The top-level Towelwise item is registered after its entries, and again on every rebuild and whenever a context key that one of the entries' conditions reads changes: the menu bar redraws only when its main menu changes, not when a submenu gains entries, and it drops a submenu with nothing to show without watching the conditions of entries inside it. The settings are also read again once extensions have registered, because on a first launch the contribution runs before the built-in extension's settings exist.
 - `workbench/workbench.common.main.ts`: one import, added at the end of the imports, away from the block VSCodium edits.
 
 **Known limits.** Editor actions that the Command Palette reads straight from the active editor are not covered. Typing `term ` in quick open still opens the terminal picker. The built-in JavaScript Debug extension adds its own terminal command.
 
-## 0002 hide the Terminal tab (`0002-towelwise-hide-terminal-tab.patch`)
+## Dropped: hiding the Terminal tab (was `0002`)
 
-**Why.** With the integrated terminal's entry points hidden, its tab in the bottom panel should go too. Kept as a separate patch so it can be dropped alone if hiding the view stops terminals from being shown (the spec's criterion 8).
-
-**What it touches (1 file, 2 hunks).** `workbench/contrib/terminal/browser/terminal.contribution.ts`: the Terminal view gets `when: !towelwise.terminalTabHidden`, a context key that 0001 sets while `workbench.action.terminal.toggleTerminal` is on the hidden list.
-
-**Risk.** A view whose `when` is false is inactive, and showing an inactive view returns nothing, so a terminal created in the panel may not be shown. Terminals in the editor area are expected to be unaffected. To be checked in the built app (panel terminal created and shown by an extension; editor terminal).
+The first version had a second patch giving the Terminal view in the bottom panel a `when` that went false while Toggle Terminal was hidden, so the tab disappeared. Review of the pinned source (2026-11-02) showed that a view whose `when` is false is inactive, and `ViewsService.openView` returns nothing for an inactive view, so a terminal created in the bottom panel by an extension (`MainThreadTerminalService.$show` to `TerminalGroupService.showPanel`) could no longer be shown. Terminals in the editor area (such as Claude Code's terminal mode) were not affected, but the panel case could not be accepted. The spec's criterion 8 allowed this fallback, so the patch was dropped and the Terminal tab stays. Anyone who wants it gone can hide it from the panel's tab menu. Deleting a file from `ide/patches/` is all it took: the build copies whatever is there.
 
 ## Upkeep log
 
 | Upstream version | Patch | Applied cleanly? | What had to change | Time |
 |---|---|---|---|---|
-| VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0001, 0002 | Yes: applied during the full build (about 14 minutes) and by forward `git apply` on pristine files and on the registration file as VSCodium edits it | Nothing; first version. A first-launch timing bug and one missing hide pattern (`terminal.integrated.*`) were found in the first built-app check and fixed in 0001 | Spike about 2 hours including two builds |
+| VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0001 | Yes: applied in four full builds (about 14 minutes each) and by forward `git apply` on pristine files and on the registration file as VSCodium edits it | Nothing from upstream; first version. Found in use and fixed in the patch: a first-launch timing bug, a missing hide pattern (`terminal.integrated.*`), and, from review, repeated groups reordering the menu and an all-conditional menu that stayed absent | Spike about 3 hours including four builds |

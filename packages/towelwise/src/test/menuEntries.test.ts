@@ -1,6 +1,6 @@
 import * as assert from 'node:assert';
 import * as vscode from 'vscode';
-import { logMenuProblems, MenuEntry, validateEntries } from '../menuEntries';
+import { logMenuProblems, MenuEntry, placeEntries, validateEntries } from '../menuEntries';
 import { SHELL_KEYS } from '../shells';
 
 const manifest = () => vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON;
@@ -158,6 +158,54 @@ suite('menu entries validator', () => {
       assert.deepStrictEqual(problems, [], when);
       assert.strictEqual(entries.length, 1, when);
     }
+  });
+
+  // Found in review: brackets and && inside quotes or a regular expression are text, not syntax, and the real
+  // parser accepts these. The check must not report them as skipped.
+  test('brackets and operators inside quotes or a regular expression are not counted', () => {
+    for (const when of [
+      "resourceFilename == 'a(b'",
+      'resourceFilename == "a)b"',
+      'resourceFilename =~ /\\(/',
+      'resourceFilename =~ /a|b/ && foo',
+      'resourceFilename =~ /a\\/b(/i',
+      "x == 'a && b'",
+      'x == "a || b" && y',
+      "x == 'it\\'s (fine'",
+      "(a == '(') || (b =~ /\\)/)",
+    ]) {
+      const { entries, problems } = validateEntries([{ command: 'x', title: 'T', when }]);
+      assert.deepStrictEqual(problems, [], when);
+      assert.strictEqual(entries.length, 1, when);
+    }
+  });
+
+  test('a real mistake is still caught when quotes and regular expressions are present', () => {
+    for (const when of ["x == 'a(b' &&", "&& x == 'a'", "(x == 'a(b'", "x == 'a(b')) ", 'x =~ /a(/ || || y']) {
+      const { entries, problems } = validateEntries([{ command: 'x', title: 'T', when }]);
+      assert.strictEqual(entries.length, 0, when);
+      assert.strictEqual(problems.length, 1, when);
+    }
+  });
+
+  // Found in review: a group name that comes back after another group is a new section, not a return to the
+  // first one, or the setting's order would be silently rearranged.
+  test('entries keep the array order, and a group that comes back is a new section', () => {
+    const e = (command: string, group: string) => ({ command, title: command, group });
+    assert.deepStrictEqual(
+      placeEntries([e('A', 'one'), e('B', 'two'), e('C', 'one')]).map((p) => [p.command, p.section, p.order]),
+      [['A', 0, 0], ['B', 1, 1], ['C', 2, 2]],
+    );
+    assert.deepStrictEqual(
+      placeEntries([e('A', 'one'), e('B', 'one'), e('C', 'two'), e('D', 'two')]).map((p) => [p.command, p.section, p.order]),
+      [['A', 0, 0], ['B', 0, 1], ['C', 1, 2], ['D', 1, 3]],
+    );
+    assert.deepStrictEqual(placeEntries([]), []);
+  });
+
+  test('placing entries keeps what the menu needs and nothing else is lost', () => {
+    const placed = placeEntries([{ command: 'a', title: '&Alpha', group: 'g', when: 'x' }]);
+    assert.deepStrictEqual(placed, [{ command: 'a', title: '&Alpha', group: 'g', when: 'x', section: 0, order: 0 }]);
   });
 
   test('something that is not a list is one problem and no entries', () => {
