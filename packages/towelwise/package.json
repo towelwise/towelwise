@@ -182,7 +182,9 @@
           "towelwise.menus.hidden": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^(menu:[A-Za-z][A-Za-z0-9._-]*|[A-Za-z][A-Za-z0-9._-]*(\\.\\*)?)$",
+              "patternErrorMessage": "Use a command id, a prefix ending in .*, or menu: followed by a menu id."
             },
             "default": [
               "workbench.action.terminal.*",
@@ -191,10 +193,14 @@
               "workbench.action.createTerminalEditorSameGroup",
               "workbench.action.quickOpenTerm",
               "terminal.integrated.*",
-              "workbench.action.tasks.*"
+              "workbench.action.tasks.*",
+              "menu:MenubarAppearanceMenu",
+              "menu:MenubarLayoutMenu",
+              "workbench.view.debug",
+              "workbench.debug.action.toggleRepl"
             ],
             "scope": "application",
-            "markdownDescription": "Commands to hide from the menus, the Command Palette and keyboard shortcuts. Each entry is a command id, or a prefix ending in `.*`. Hidden commands still run when other code calls them. Empty the list to bring everything back. Needs Towelwise AI."
+            "markdownDescription": "Commands to hide from the menus, the Command Palette and keyboard shortcuts. Each entry is a command id, or a prefix ending in `.*`. An entry of the form `menu:MenuId` hides the submenu item that opens that menu, such as `menu:MenubarLayoutMenu`, but not the commands inside it. Hidden commands still run when other code calls them. Empty the list to bring everything back. Needs Towelwise AI."
           },
           "towelwise.menus.towelwise": {
             "type": "array",

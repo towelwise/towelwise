@@ -14,6 +14,10 @@ const HIDDEN_DEFAULT = [
   'workbench.action.quickOpenTerm',
   'terminal.integrated.*',
   'workbench.action.tasks.*',
+  'menu:MenubarAppearanceMenu',
+  'menu:MenubarLayoutMenu',
+  'workbench.view.debug',
+  'workbench.debug.action.toggleRepl',
 ];
 
 suite('menu settings', () => {
@@ -25,11 +29,17 @@ suite('menu settings', () => {
     assert.deepStrictEqual(setting.default, HIDDEN_DEFAULT);
   });
 
-  test('every hide pattern is an exact command id or a prefix ending in a single *', () => {
+  test('every hide pattern is an exact command id, a prefix ending in a single *, or a menu: id', () => {
     for (const pattern of properties()['towelwise.menus.hidden'].default as string[]) {
-      assert.ok(/^[A-Za-z][A-Za-z0-9._-]*\*?$/.test(pattern) && (pattern.match(/\*/g) ?? []).length <= 1, pattern);
+      assert.ok(/^(menu:[A-Za-z][A-Za-z0-9._-]*|[A-Za-z][A-Za-z0-9._-]*\*?)$/.test(pattern) && (pattern.match(/\*/g) ?? []).length <= 1, pattern);
       if (pattern.includes('*')) assert.ok(pattern.endsWith('.*'), `${pattern}: a prefix should end at a dot`);
     }
+  });
+
+  test('the hide list schema accepts ids, dot-prefixes and menu: ids, and rejects the rest', () => {
+    const pattern = new RegExp(properties()['towelwise.menus.hidden'].items.pattern);
+    for (const ok of ['workbench.view.debug', 'workbench.action.tasks.*', 'terminal.integrated.*', 'menu:MenubarLayoutMenu']) assert.ok(pattern.test(ok), ok);
+    for (const bad of ['', 'menu:', 'menu:*', 'menu:Menubar*', 'menu:A.*', 'a*b', '*', 'a.**', ' workbench.view.debug', 'menu: X']) assert.ok(!pattern.test(bad), JSON.stringify(bad));
   });
 
   test('the menu entries setting is application-scoped and its schema matches the contract', () => {

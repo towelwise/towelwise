@@ -27,7 +27,7 @@ index f54769f2..8f200cc6 100644
  	addCommand(command: ICommandAction): IDisposable {
  		this._commands.set(command.id, command);
  		this._onDidChangeMenu.fire(MenuRegistryChangeEvent.for(MenuId.CommandPalette));
-@@ -541,7 +552,26 @@ export const MenuRegistry: IMenuRegistry = new class implements IMenuRegistry {
+@@ -541,7 +552,28 @@ export const MenuRegistry: IMenuRegistry = new class implements IMenuRegistry {
  			// all commands by default
  			this._appendImplicitItems(result);
  		}
@@ -48,6 +48,8 @@ index f54769f2..8f200cc6 100644
 +					kept.push({ ...item, alt: undefined });
 +					continue;
 +				}
++			} else if (HiddenCommands.isMenuHidden(item.submenu.id)) {
++				continue;
 +			}
 +			kept.push(item);
 +		}
@@ -60,7 +62,7 @@ new file mode 100644
 index 00000000..e9171a78
 --- /dev/null
 +++ b/src/vs/platform/commands/common/hiddenCommands.ts
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,58 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Towelwise AI: commands hidden from menus, the Command Palette and default keyboard shortcuts.
 + *
@@ -80,6 +82,10 @@ index 00000000..e9171a78
 +	'workbench.action.quickOpenTerm',
 +	'terminal.integrated.*',
 +	'workbench.action.tasks.*',
++	'menu:MenubarAppearanceMenu',
++	'menu:MenubarLayoutMenu',
++	'workbench.view.debug',
++	'workbench.debug.action.toggleRepl',
 +];
 +
 +class HiddenCommandsImpl {
@@ -89,7 +95,7 @@ index 00000000..e9171a78
 +
 +	readonly onDidChange: Event<void> = this._onDidChange.event;
 +
-+	// An entry is an exact command id, or a prefix ending in `*`.
++	// An entry is an exact command id, a prefix ending in `*`, or `menu:MenuId` (see isMenuHidden).
 +	set(patterns: readonly string[]): void {
 +		const next = patterns.filter(p => typeof p === 'string' && p.length > 0);
 +		if (next.length === this.patterns.length && next.every((p, i) => p === this.patterns[i])) {
@@ -106,6 +112,11 @@ index 00000000..e9171a78
 +			}
 +		}
 +		return false;
++	}
++
++	// `menu:MenuId` hides the submenu item that opens that menu, never the commands inside it. Exact match only.
++	isMenuHidden(menuId: string): boolean {
++		return this.patterns.includes('menu:' + menuId);
 +	}
 +}
 +
