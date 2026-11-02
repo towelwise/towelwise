@@ -177,14 +177,14 @@ Offered further down the road, after Hyperspace, Recall and Learning. It's comin
 
 ---
 
-## Strip-down candidates (draft for the owner's review, 2026-11-02)
+## Strip-down candidates (owner decisions recorded 2026-11-02)
 
-Nothing here is decided. The idea: Towelwise AI is meant to be a slim IDE for AI agent development that is friendly to newcomers, so look at what Code-OSS ships that the product does not need, and decide area by area.
+Some choices below are decided and marked so; the rest is open. The idea: Towelwise AI is meant to be a slim IDE for AI agent development that is friendly to newcomers, so look at what Code-OSS ships that the product does not need, and decide area by area.
 
 **How to weigh each one**
 
 - **Do the agents need it?** The agents decide this first. If Claude Code or Codex depend on an area, it stays.
-- **Hide before delete.** Every upstream release has to be re-based onto our changes ([0004](../docs/decisions/0004-towelwise-ai-is-an-ide-built-from-code-oss-patches.md)). Hiding the way in (menus, shortcuts, panel tabs, default settings) costs little and can be undone. Deleting code touches every file that imports it, and each of those can break on an update.
+- **Hide before delete.** Every upstream release has to be re-based onto our changes ([0004](docs/decisions/0004-towelwise-ai-is-an-ide-built-from-code-oss-patches.md)). Hiding the way in (menus, shortcuts, panel tabs, default settings) costs little and can be undone. Deleting code touches every file that imports it, and each of those can break on an update.
 - **Built-in extensions are cheaper than core code.** Code-OSS bundles 107 extensions (language grammars, Git, GitHub sign-in, Emmet, and so on). Leaving one out of the build is a file removal in `ide/build.sh`, not a patch of core code. Some depend on each other, so each needs checking.
 - **Newcomers are a separate question from the owner's habits.** The owner runs terminal commands outside the IDE; a newcomer told by an agent to "run this command" may want to do it inside. That is a product choice, not something the code answers.
 
@@ -221,7 +221,7 @@ Sizes are source-code size in the pinned Code-OSS, not the installed app. "Outsi
 
 **Decided so far (owner, 2026-11-02):** hide Tasks, Debug, Testing and Notebooks; keep MCP; keep Source Control as is. Hiding means the way in is hidden and the code stays. How hiding is done has not been designed.
 
-**Terminal, decided (owner, 2026-11-02):** keep the integrated terminal and hide its user entry points (menu items, panel tab, shortcut, palette commands). In their place, entries that open shells in a normal window outside the IDE, each starting in the project folder: PowerShell and PowerShell (Admin), Command Prompt and Command Prompt (Admin). Further entries approved: Git Bash, and PowerShell 7 and WSL only when installed (WSL needs a Linux distro installed; the owner has WSL without one). Windows Terminal is a window that can host these shells in tabs, not a shell itself; whether to offer it as an entry or as the place the entries open is still open. Only installed shells show, and the list would be editable. Admin entries use Windows' own permission prompt; no elevated shell lives inside the IDE. The entries can be Command Palette commands from the built-in extension with no patch; placing them in the top Terminal menu and hiding the integrated terminal's own entries needs a core patch. How patches are decided is in [0005](../docs/decisions/0005-patch-core-only-when-the-extension-cannot.md) (approved).
+**Terminal, decided (owner, 2026-11-02):** keep the integrated terminal and hide its user entry points (menu items, panel tab, shortcut, palette commands). In their place, entries that open shells in a normal window outside the IDE, each starting in the project folder: PowerShell and PowerShell (Admin), Command Prompt and Command Prompt (Admin). Further entries approved: Git Bash, and PowerShell 7 and WSL only when installed (WSL needs a Linux distro installed; the owner has WSL without one). Windows Terminal is a window that can host these shells in tabs, not a shell itself; whether to offer it as an entry or as the place the entries open is still open. Only installed shells show, and the list would be editable. Admin entries use Windows' own permission prompt; no elevated shell lives inside the IDE. The entries can be Command Palette commands from the built-in extension with no patch; placing them in the top Terminal menu and hiding the integrated terminal's own entries needs a core patch. How patches are decided is in [0005](docs/decisions/0005-patch-core-only-when-the-extension-cannot.md) (approved).
 
 **Terminal: ideas and facts to weigh**
 
@@ -242,7 +242,7 @@ Sizes are source-code size in the pinned Code-OSS, not the installed app. "Outsi
 - Claude Code offers its own ways in: open in a new tab (`claude-vscode.editor.open`), the primary editor (`claude-vscode.primaryEditor.open`), the side bar (`claude-vscode.sidebar.open`), or a new window.
 - A Towelwise Agents entry in the built-in extension could offer "Open Claude Code" and "Open Codex", each following one setting for where it opens. No core patch. Not designed: the setting's name and default, how installed agents are found, and whether the VS Code Chat view is hidden at the same time.
 
-**Still open for the owner:** the terminal for newcomers (stay, hide, or the external-and-elevated idea); the Chat view (hide, replace with an Agents entry, or leave); whether hiding is enough or some areas should eventually be deleted; and whether built-in extensions get their own pass.
+**Still open for the owner:** how the hiding is done (the menu hook patch, see 0005, and which areas go first); whether Windows Terminal is an entry or the place the shell entries open; the default for where agents open (editor panels or the side bar), and whether the VS Code Chat view is hidden; whether hiding is enough or some areas should eventually be deleted; and whether built-in extensions get their own pass. Settled and not to be reopened: keep the integrated terminal with its entry points hidden, external shells instead, Tasks, Debug, Testing and Notebooks hidden, MCP and Source Control kept.
 
 ---
 
