@@ -236,6 +236,12 @@ Sizes are source-code size in the pinned Code-OSS, not the installed app. "Outsi
 - Codex also registers itself in the built-in Chat view's session list (its manifest declares a chat session type, `openai-codex`). Claude Code's manifest declares none; how it shows up in the Chat picker was not found and may be done in code.
 - So the agents do not depend on the Chat view to exist. Hiding the Chat view would remove the shared picker and VS Code's own native chat, not the agents. A Towelwise-owned "Agents" entry that lists installed agents and opens each in its own view could be built in the built-in extension, from the commands Choose Layout already uses, with no core patch. Nothing has been designed.
 
+**Agents: where they open, decided (owner, 2026-11-02):** the owner prefers each agent in its own editor panel, and wants it to be a choice for other users: separate editor panels, or the shared secondary side bar with one tab per agent. Facts behind it:
+
+- Both agents put their main view in the secondary side bar, which draws one tab per view, so opening either one shows a "CLAUDE CODE | CODEX" tab strip. Codex's "Open Codex Sidebar" (`chatgpt.openSidebar`) opens that; Codex's "New Codex Agent" (`chatgpt.newCodexPanel`) opens Codex on its own, as the owner saw it. Whether it is an editor panel was not traced in code.
+- Claude Code offers its own ways in: open in a new tab (`claude-vscode.editor.open`), the primary editor (`claude-vscode.primaryEditor.open`), the side bar (`claude-vscode.sidebar.open`), or a new window.
+- A Towelwise Agents entry in the built-in extension could offer "Open Claude Code" and "Open Codex", each following one setting for where it opens. No core patch. Not designed: the setting's name and default, how installed agents are found, and whether the VS Code Chat view is hidden at the same time.
+
 **Still open for the owner:** the terminal for newcomers (stay, hide, or the external-and-elevated idea); the Chat view (hide, replace with an Agents entry, or leave); whether hiding is enough or some areas should eventually be deleted; and whether built-in extensions get their own pass.
 
 ---
