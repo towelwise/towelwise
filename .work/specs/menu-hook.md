@@ -1,6 +1,6 @@
 # Menu hook: hide built-in entries from a list, and our own Towelwise menu
 
-Status: ready-for-agent
+Status: ready-for-agent (defaults and entries contract approved by the owner, 2026-11-02)
 
 ## Goal
 
