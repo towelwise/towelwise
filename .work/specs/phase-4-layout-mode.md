@@ -1,6 +1,10 @@
 # Phase 4, slice 1: Layout mode
 
-Status: ready-for-agent
+Status: dropped (owner, 2026-11-02)
+
+## Outcome
+
+Built as a spike and tried in the built app on 2026-11-02, then dropped at the owner's request: the boxes over the live window looked worse and told less than the Edit Hyperspace Layout picker, which already shows what each part is and what Keep or Hide will do. The patch and the extension commands behind it were removed (the extension commands are in git history, reverted in `efcb8e2`). The picker stays as the way to edit the hyperspace layout. The spike did show that the patch hook works: VSCodium applied our patch from `patches/user/` with no error, and the build took about 14 minutes. Nothing below was shipped.
 
 ## Goal
 
