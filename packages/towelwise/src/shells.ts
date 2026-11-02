@@ -20,6 +20,8 @@ export interface Plan {
   file: string;
   args: string[];
   cwd: string;
+  // Values handed to the program through its environment, on top of the inherited one.
+  env?: Record<string, string>;
 }
 
 const TITLES: Record<string, string> = {
@@ -39,15 +41,17 @@ export function systemExe(root: string, name: 'cmd.exe' | 'powershell.exe' | 'ws
     : windows.join(root, 'System32', name);
 }
 
-// Text that comes from outside (a folder name, a program path) is never written into a script as text:
-// PowerShell reads several characters as quotes (the plain apostrophe and the curly and low single quotes),
-// and a name containing one could end the string and add commands. It goes in as base64, whose alphabet
-// holds nothing PowerShell treats as syntax, and the script decodes it.
-const data = (text: string) =>
-  `([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${Buffer.from(text, 'utf8').toString('base64')}')))`;
-// Fixed ASCII tokens only (flags and base64): safe to quote plainly.
-const token = (text: string) => `'${text}'`;
-const encode = (script: string) => Buffer.from(script, 'utf16le').toString('base64');
+// The text an administrator launcher runs is fixed: it never contains a folder or a program path. Those arrive
+// in environment variables, which PowerShell reads as plain values and never parses as code, so no character in
+// a name (the plain apostrophe, the curly and low single quotes, a semicolon) can end a string and add commands.
+// It is also plain, readable text. An earlier version hid the folder in a base64 -EncodedCommand; Windows Defender
+// blocked that as malware-like ("CMD_HSTR:General.ML.B") before the permission prompt could appear.
+const LAUNCH_SHELL =
+  "Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-NoExit','-Command','Set-Location -LiteralPath $env:TW_SHELL_DIR'";
+// Command Prompt starts inside an elevated PowerShell that has already changed folder, so the folder never
+// reaches Command Prompt's own parsing, where %NAME% and & would matter.
+const LAUNCH_CMD =
+  "Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-Command','Set-Location -LiteralPath $env:TW_SHELL_DIR; & $env:TW_SHELL_CMD /k'";
 
 export const startDir = (folders: string[], home: string): string => folders[0] ?? home;
 
@@ -61,8 +65,8 @@ export function available(machine: Machine): ShellKey[] {
 }
 
 // How to start a shell. Plain shells use `start`, as VS Code's own external terminal does, with the folder
-// as the working directory. Administrator shells run Start-Process -Verb RunAs from an encoded script, so the
-// folder only ever appears inside one quoted literal, and Windows shows its own permission prompt.
+// as the working directory. Administrator shells run Start-Process -Verb RunAs from fixed text, with the folder
+// and program in the environment, and Windows shows its own permission prompt.
 export function plan(key: ShellKey, dir: string, machine: Machine): Plan {
   const need = (value: string | undefined, what: string) => {
     if (!value) throw new Error(`${what} is not installed`);
@@ -71,12 +75,12 @@ export function plan(key: ShellKey, dir: string, machine: Machine): Plan {
   const cmdExe = systemExe(machine.systemRoot, 'cmd.exe');
   const psExe = systemExe(machine.systemRoot, 'powershell.exe');
   const start = (title: string, ...program: string[]): Plan => ({ file: cmdExe, args: ['/c', 'start', title, ...program], cwd: dir });
-  const elevate = (program: string, shellArgs: string[], innerScript: string): Plan => {
-    const list = [...shellArgs, '-EncodedCommand', encode(innerScript)].map(token).join(',');
-    const launcher = encode(`Start-Process -FilePath ${data(program)} -Verb RunAs -ArgumentList @(${list})`);
-    return { file: psExe, args: ['-NoProfile', '-EncodedCommand', launcher], cwd: dir };
-  };
-  const go = `Set-Location -LiteralPath ${data(dir)}`;
+  const elevate = (script: string, program: string, more: Record<string, string> = {}): Plan => ({
+    file: psExe,
+    args: ['-NoProfile', '-Command', script],
+    cwd: dir,
+    env: { TW_SHELL_PROGRAM: program, TW_SHELL_DIR: dir, ...more },
+  });
 
   switch (key) {
     case 'powershell':
@@ -90,13 +94,11 @@ export function plan(key: ShellKey, dir: string, machine: Machine): Plan {
     case 'wsl':
       return start(TITLES.wsl, systemExe(machine.systemRoot, 'wsl.exe'));
     case 'powershellAdmin':
-      return elevate(psExe, ['-NoExit'], go);
+      return elevate(LAUNCH_SHELL, psExe);
     case 'pwshAdmin':
-      return elevate(need(machine.pwsh, 'PowerShell 7'), ['-NoExit'], go);
+      return elevate(LAUNCH_SHELL, need(machine.pwsh, 'PowerShell 7'));
     case 'cmdAdmin':
-      // Command Prompt starts inside an elevated PowerShell that has already changed folder, so the folder
-      // never reaches Command Prompt's own parsing, where %NAME% and & would matter.
-      return elevate(psExe, [], `${go}; & ${data(cmdExe)} /k`);
+      return elevate(LAUNCH_CMD, psExe, { TW_SHELL_CMD: cmdExe });
   }
 }
 
@@ -105,7 +107,13 @@ export function launch(key: ShellKey, dir: string, machine: Machine): Promise<'o
   const p = plan(key, dir, machine);
   const elevated = key.endsWith('Admin');
   return new Promise((resolve, reject) => {
-    const child = spawn(p.file, p.args, { cwd: p.cwd, detached: !elevated, windowsHide: elevated, stdio: 'ignore' });
+    const child = spawn(p.file, p.args, {
+      cwd: p.cwd,
+      env: { ...process.env, ...p.env },
+      detached: !elevated,
+      windowsHide: elevated,
+      stdio: 'ignore',
+    });
     child.once('error', reject);
     if (elevated) {
       child.once('exit', (code) => resolve(code === 0 ? 'opened' : 'cancelled'));
