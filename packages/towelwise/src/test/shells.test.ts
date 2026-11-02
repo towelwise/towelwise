@@ -23,10 +23,16 @@ const ALL: ShellKey[] = ['powershell', 'powershellAdmin', 'cmd', 'cmdAdmin', 'gi
 
 // The fixed text an administrator launcher runs. It never contains a folder or a program path: those arrive in
 // environment variables, which PowerShell reads as values and never parses as code.
+// The elevated window does not inherit the environment, so the values reach it as lists of character codes.
+const CODES_DIR = "$d = ($env:TW_SHELL_DIR.ToCharArray() | ForEach-Object { [int]$_ }) -join ','; ";
+const CODES_CMD = "$c = ($env:TW_SHELL_CMD.ToCharArray() | ForEach-Object { [int]$_ }) -join ','; ";
 const LAUNCH_SHELL =
-  "Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-NoExit','-Command','Set-Location -LiteralPath $env:TW_SHELL_DIR'";
+  CODES_DIR +
+  "Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-NoExit','-Command',('Set-Location -LiteralPath ([string]::new([char[]](' + $d + ')))')";
 const LAUNCH_CMD =
-  "Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-Command','Set-Location -LiteralPath $env:TW_SHELL_DIR; & $env:TW_SHELL_CMD /k'";
+  CODES_DIR +
+  CODES_CMD +
+  "Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-Command',('Set-Location -LiteralPath ([string]::new([char[]](' + $d + '))); & ([string]::new([char[]](' + $c + '))) /k')";
 
 // Names that must stay data. The curly and low single quotes are string delimiters in PowerShell, as well as the
 // plain apostrophe.
@@ -139,7 +145,8 @@ suite('external shells', () => {
   // The real PowerShell, on Windows only.
   (process.platform === 'win32' ? test : test.skip)('PowerShell parses the fixed scripts as only the commands we wrote', function () {
     this.timeout(60000);
-    const inner = ['Set-Location -LiteralPath $env:TW_SHELL_DIR', 'Set-Location -LiteralPath $env:TW_SHELL_DIR; & $env:TW_SHELL_CMD /k'];
+    // What the elevated window runs, with sample codes in place of the real ones.
+    const inner = ['Set-Location -LiteralPath ([string]::new([char[]](67,58,92)))', 'Set-Location -LiteralPath ([string]::new([char[]](67,58,92))); & ([string]::new([char[]](67,58))) /k'];
     const scripts = [LAUNCH_SHELL, LAUNCH_CMD, ...inner];
     const probe =
       '$list=Get-Content -Raw -Encoding UTF8 $env:TW_SCRIPTS | ConvertFrom-Json;' +
@@ -150,8 +157,9 @@ suite('external shells', () => {
     fs.writeFileSync(file, JSON.stringify(scripts), 'utf8');
     try {
       const out = execFileSync(PS, ['-NoProfile', '-NonInteractive', '-Command', probe], { env: { ...process.env, TW_SCRIPTS: file }, encoding: 'utf8' }).trim().split(/\r?\n/);
-      // Each result reads: parse errors, statements, commands. Start-Process is one command; the inner scripts one and two.
-      assert.deepStrictEqual(out, ['0 1 1', '0 1 1', '0 1 1', '0 2 2']);
+      // Each result reads: parse errors, statements, commands. The launchers: the code lists (ForEach-Object) and
+      // Start-Process, nothing else. The elevated scripts: Set-Location, then for Command Prompt the one call.
+      assert.deepStrictEqual(out, ['0 2 2', '0 3 3', '0 1 1', '0 2 2']);
     } finally {
       fs.rmSync(file, { force: true });
     }
@@ -168,6 +176,27 @@ suite('external shells', () => {
         { env: { ...process.env, ...p.env }, encoding: 'utf8' },
       ).replace(/\r?\n$/, '');
       assert.strictEqual(read, dir);
+    }
+  });
+
+  // The real launcher text, with only the permission prompt taken out: Start-Process becomes a plain assignment, and
+  // the elevated text it would have sent is run here with Set-Location turned into Write-Output.
+  (process.platform === 'win32' ? test : test.skip)('the text sent to the elevated window rebuilds every hostile folder and program exactly', function () {
+    this.timeout(120000);
+    for (const key of ['powershellAdmin', 'cmdAdmin'] as ShellKey[]) {
+      for (const dir of HOSTILE) {
+        const p = plan(key, dir, machine);
+        const cut = p.args[2].indexOf('Start-Process');
+        const elevatedExpression = p.args[2].slice(p.args[2].indexOf("('Set-Location"));
+        const script =
+          p.args[2].slice(0, cut) +
+          `$r = ${elevatedExpression}; $r = $r.Replace('Set-Location -LiteralPath ', 'Write-Output ').Replace(' /k', ' /c echo DONE'); Invoke-Expression $r`;
+        const out = execFileSync(PS, ['-NoProfile', '-NonInteractive', '-Command', '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; ' + script], {
+          env: { ...process.env, ...p.env },
+          encoding: 'utf8',
+        }).replace(/\r?\n$/, '').split(/\r?\n/);
+        assert.deepStrictEqual(out, key === 'cmdAdmin' ? [dir, 'DONE'] : [dir], `${key} ${dir}`);
+      }
     }
   });
 

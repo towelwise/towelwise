@@ -44,14 +44,22 @@ export function systemExe(root: string, name: 'cmd.exe' | 'powershell.exe' | 'ws
 // The text an administrator launcher runs is fixed: it never contains a folder or a program path. Those arrive
 // in environment variables, which PowerShell reads as plain values and never parses as code, so no character in
 // a name (the plain apostrophe, the curly and low single quotes, a semicolon) can end a string and add commands.
-// It is also plain, readable text. An earlier version hid the folder in a base64 -EncodedCommand; Windows Defender
-// blocked that as malware-like ("CMD_HSTR:General.ML.B") before the permission prompt could appear.
+// The elevated window does not inherit the environment (Windows starts it from a different context), so the
+// launcher turns each value into a list of character codes, and the elevated window is handed digits and commas
+// only, which it turns back into text. Nothing in a name can reach PowerShell's parser, and the text stays plain
+// and readable. An earlier version hid the folder in a base64 -EncodedCommand; Windows Defender blocked that as
+// malware-like ("CMD_HSTR:General.ML.B") before the permission prompt could appear.
+const CODES = (variable: string, into: string) => `$${into} = ($env:${variable}.ToCharArray() | ForEach-Object { [int]$_ }) -join ','; `;
+const TEXT = (codes: string) => `[string]::new([char[]](' + $${codes} + '))`;
 const LAUNCH_SHELL =
-  "Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-NoExit','-Command','Set-Location -LiteralPath $env:TW_SHELL_DIR'";
+  CODES('TW_SHELL_DIR', 'd') +
+  `Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-NoExit','-Command',('Set-Location -LiteralPath (${TEXT('d')})')`;
 // Command Prompt starts inside an elevated PowerShell that has already changed folder, so the folder never
 // reaches Command Prompt's own parsing, where %NAME% and & would matter.
 const LAUNCH_CMD =
-  "Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-Command','Set-Location -LiteralPath $env:TW_SHELL_DIR; & $env:TW_SHELL_CMD /k'";
+  CODES('TW_SHELL_DIR', 'd') +
+  CODES('TW_SHELL_CMD', 'c') +
+  `Start-Process -FilePath $env:TW_SHELL_PROGRAM -Verb RunAs -ArgumentList '-Command',('Set-Location -LiteralPath (${TEXT('d')}); & (${TEXT('c')}) /k')`;
 
 export const startDir = (folders: string[], home: string): string => folders[0] ?? home;
 
