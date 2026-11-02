@@ -46,6 +46,10 @@
         "title": "Towelwise: Edit Hyperspace Layout"
       },
       {
+        "command": "towelwise.layoutMode.open",
+        "title": "Towelwise: Layout Mode"
+      },
+      {
         "command": "towelwise.layout.choose",
         "title": "Towelwise: Choose Layout"
       },
