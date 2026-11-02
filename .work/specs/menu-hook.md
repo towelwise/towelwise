@@ -9,7 +9,7 @@ The first committed core patch, as planned in [decision 0005](../../docs/decisio
 ## Acceptance criteria
 
 1. **The build carries the patch.** `ide/build.sh` copies `ide/patches/*.patch` into the VSCodium checkout's `patches/user/` after its reset and clean steps and before VSCodium prepares the source. The patch applies cleanly to the pinned release, the app builds and launches, and the built workbench contains the hook. (The same hook that the dropped layout-mode spike proved; the build step was never committed.)
-2. **A hide list in a setting.** The built-in extension contributes `towelwise.menus.hidden`, a list of command ids at application scope, with a default that covers the integrated terminal and Tasks. An entry is an exact command id, or a prefix ending in `*` (for example `workbench.action.terminal.*`). The default must include the three editor-terminal commands that sit outside that prefix: `workbench.action.createTerminalEditor`, `workbench.action.createTerminalEditorSide` and `workbench.action.createTerminalEditorSameGroup` (found in review: the first two are in the Command Palette, the third is an editor-title action).
+2. **A hide list in a setting.** The built-in extension contributes `towelwise.menus.hidden`, a list of command ids at application scope, with a default that covers the integrated terminal and Tasks. An entry is an exact command id, or a prefix ending in `*` (for example `workbench.action.terminal.*`). The default must include the three editor-terminal commands that sit outside that prefix: `workbench.action.createTerminalEditor`, `workbench.action.createTerminalEditorSide` and `workbench.action.createTerminalEditorSameGroup` (found in review: the first two are in the Command Palette, the third is an editor-title action). It must also include `workbench.action.quickOpenTerm` ("Switch Active Terminal"): its picker always offers "Create New Terminal" and "Create New Terminal With Profile", so leaving it visible would keep a Command Palette route to a new integrated terminal even though the New command is hidden. A scan of every terminal command id outside the prefix found no other creation route among workbench commands; the two picker-navigation ids (`workbench.action.quickOpenNavigateNextInTerminalPicker` and `...Previous...`) only move within that picker and are left alone.
 3. **Hidden everywhere the person can reach it, for workbench commands.** A workbench command on the list no longer appears in the top menus, the Command Palette or the right-click menus, including as an alternate (`alt`) menu action, and its default keyboard shortcuts no longer fire. In the default setup this includes the terminal's New Terminal, the three editor-terminal commands, Toggle Terminal and the Ctrl+Backquote shortcuts, and the Tasks entries. **The promise is deliberately narrower for editor actions** (owner, 2026-11-02): the Command Palette also lists actions read straight from the active editor (for example `editor.action.commentLine`), by a path that does not go through the menu registry. Listing such an id hides its menu items and shortcuts but not its palette entry. Nothing in this slice needs them hidden; a later slice (Debug has some editor actions) can add that path when it is needed.
 4. **Hiding is not disabling.** Hidden commands still run when other code calls them. Claude Code's optional terminal mode ("Claude Code: Open in Terminal") and any extension that calls the terminal API keep working.
 5. **The list takes effect without a rebuild.** Editing the setting changes what is hidden, live, or at worst after a window reload (the spike records which, because live needs the menus and the keybinding resolver to be told to rebuild); the person can empty the list to bring everything back. At startup, filtering applies before any menu or keybinding result is cached from the unfiltered state.
@@ -30,7 +30,7 @@ The first committed core patch, as planned in [decision 0005](../../docs/decisio
 - Test boundary (owner, 2026-11-02): automated tests on the extension side; the patch checked by a type-check, a forward `git apply` on a clean file, the build, and the owner's look at the built app.
 - The hide list's promise covers workbench commands in menus, the palette and shortcuts; editor actions read from the active editor are out of this slice (owner, 2026-11-02, after Codex's review).
 
-## The menu-entries contract (a proposal for the owner to approve)
+## The menu-entries contract (approved by the owner, 2026-11-02)
 
 `towelwise.menus.towelwise` is an array of objects, in display order, so the extension that writes it and the patch that reads it agree on one shape:
 
@@ -41,12 +41,12 @@ The first committed core patch, as planned in [decision 0005](../../docs/decisio
 | `group` | string, optional | Entries with the same group are shown together; a change of group draws a separator. Default: the previous entry's group. |
 | `when` | string, optional | A context-key expression, such as `towelwise.shell.available.gitbash`. The entry shows only while it is true. Default: always. |
 
-Malformed entries (not an object, no `command` or `title`, a non-string field, an expression that does not parse) are skipped, and one warning is logged naming the position; the rest still show. Unknown fields are ignored. The manifest contributes a JSON schema for this setting, so the settings editor also checks what the person types. Order is the array order; the menu's position in the menu bar and its title are fixed by the patch.
+Malformed entries (not an object, no `command` or `title`, a non-string field, an expression that does not parse) are skipped, and one warning is logged naming the position; the rest still show. Unknown fields are ignored. The manifest contributes a JSON schema for this setting, so the settings editor also checks what the person types. Order is the array order, and the patch must keep it: it gives each entry an explicit order and must not let the menu's own group sorting reorder them. The menu's position in the menu bar and its title are fixed by the patch.
 
 ## Verification
 
 - **Automated (the extension's tests, same seam as the others):**
-  - The manifest contributes `towelwise.menus.hidden` with scope `application`, a list type, and a default that contains the terminal pattern, the three editor-terminal ids, and the Tasks pattern; and the menu-entries setting with the entries in criterion 6.
+  - The manifest contributes `towelwise.menus.hidden` with scope `application`, a list type, and a default that contains the terminal pattern, the three editor-terminal ids, `workbench.action.quickOpenTerm`, and the Tasks pattern; and the menu-entries setting with the entries in criterion 6.
   - The menu-entries default validates against the contract above (every entry has a string `command` and `title`, and any `group` and `when` are strings), and the manifest's schema for the setting matches the contract; a validator for the contract lives in the extension and is tested with good entries and with each kind of malformed entry.
   - Every command id in the menu-entries default is a command the extension registers or contributes, so the menu cannot point at nothing.
   - The shell entries in the menu-entries default carry the same availability gating (`when`) as their palette entries, and each `when` names a context key the extension sets.
@@ -55,15 +55,15 @@ Malformed entries (not an object, no `command` or `title`, a non-string field, a
 - **Build and package:** the four root commands.
 - **Manual (the owner, built app):**
   - The menu bar shows Towelwise and no Terminal menu; every Towelwise entry runs; the shell entries appear only for installed shells.
-  - Search the Command Palette for "Terminal:" and "Tasks:": the hidden ones are gone, including "Create New Terminal in Editor Area" and "...to the Side". Press Ctrl+Backquote: nothing happens.
+  - Search the Command Palette for "Terminal:" and "Tasks:": the hidden ones are gone, including "Create New Terminal in Editor Area", "...to the Side" and "Switch Active Terminal". Press Ctrl+Backquote: nothing happens.
   - Look at the bottom panel's tabs for Terminal (criterion 8, with the outcome recorded either way).
   - Run "Claude Code: Open in Terminal": it still opens its terminal and runs. If the tab was hidden, also check a terminal in the bottom panel can be created and shown by an extension, as well as one in the editor area.
   - Empty `towelwise.menus.hidden` and confirm everything returns; put a pattern back and confirm it is hidden again. Record whether this takes effect live or after a reload.
   - Edit `towelwise.menus.towelwise` (change a title, move an entry to another group, delete one, add one with a mistake in it): the Towelwise menu follows, the bad entry is skipped, and a warning appears in the log. Record whether this takes effect live or after a reload.
 
-## Implementer defaults (not approved; flag in review)
+## Implementer defaults (approved by the owner, 2026-11-02)
 
-- Setting names `towelwise.menus.hidden` and `towelwise.menus.towelwise`, and the default hide list: `workbench.action.terminal.*`, `workbench.action.createTerminalEditor`, `workbench.action.createTerminalEditorSide`, `workbench.action.createTerminalEditorSameGroup`, `workbench.action.tasks.*`, plus the Tasks entries in the Terminal menu by their command ids.
+- Setting names `towelwise.menus.hidden` and `towelwise.menus.towelwise`, and the default hide list: `workbench.action.terminal.*`, `workbench.action.createTerminalEditor`, `workbench.action.createTerminalEditorSide`, `workbench.action.createTerminalEditorSameGroup`, `workbench.action.quickOpenTerm`, `workbench.action.tasks.*`, plus the Tasks entries in the Terminal menu by their command ids.
 - Pattern syntax: exact id, or a trailing `*` for a prefix; nothing more.
 - The menu-entries contract above, including skipping malformed entries with a logged warning.
 - The Towelwise menu's contents and order (Hyperspace group, Layout group, then Shells), and its position in the menu bar.
@@ -77,6 +77,7 @@ Malformed entries (not an object, no `command` or `title`, a non-string field, a
 - The Chat view and the Agents entry; Windows Terminal as an entry; a pass over the built-in extensions.
 - Native macOS and Linux menus; keyboard shortcut editing beyond removing defaults for hidden commands.
 - Hiding editor actions from the Command Palette (the palette reads them from the active editor, not the menu registry); needed later for Debug.
+- Two routes a hide list cannot close, recorded so they are not found by surprise: typing `term ` in the quick-open box opens the same terminal picker (a quick-access prefix, not a command), and the built-in JavaScript Debug extension adds its own "Create JavaScript Debug Terminal" command (a Debug-slice item). Neither is needed for this slice's promise; the spike notes whether either matters in practice.
 - Changing the integrated terminal itself.
 
 ## Unresolved / external prerequisites
