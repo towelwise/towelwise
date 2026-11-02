@@ -91,7 +91,7 @@ A real Towelwise AI app for Windows, with no core patches of our own. See [the s
 
 The first core patch, kept small and careful. This is the headline feature: your UI, your way.
 
-1. **Layout mode.** A visible box over every part of the window. Turn each on or off, and set its width and height.
+1. **The layout editor.** Turn each part of the window on or off, and set its width and height. On or off is done: the Edit Hyperspace Layout picker shows a mock window where you choose Keep or Hide for each part. Boxes drawn over the live window were tried as a spike on 2026-11-02 and dropped, because the picker was clearer and the boxes looked worse. Setting widths and heights is what still needs the first core patch.
 2. **Save as your hyperspace layout.** Sizes are proportions at first, so they carry across screens.
 3. **Locked hyperspace.** While it's on, the window holds to your layout and no other way. Anything that wants to open shows a notification instead; click it and it opens in a hovering window you can dismiss.
 4. **Default keys** for going in and out of hyperspace, with more to come. Today's defaults are `Alt+Shift+J` and `Alt+Shift+L`.

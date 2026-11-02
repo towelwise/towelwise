@@ -12,3 +12,6 @@ CLAUDE.md
 # Working notes between agents: local only, never committed
 .work/HANDOFF.md
 ide/icons/preview-transparent.png
+
+# Local icon exploration; only the chosen image is copied into ide/icons
+.work/icon-concepts/
