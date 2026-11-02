@@ -175,6 +175,127 @@
             "markdownDescription": "Command ids to run after the containers when you run **Towelwise: Restore Layout**, in order, for panels that are not side bars (for example an agent that opens as an editor tab). Not run by apply on startup. A command that opens a new tab each time can pile up duplicates if the tab is already open."
           }
         }
+      },
+      {
+        "title": "Towelwise: Menus",
+        "properties": {
+          "towelwise.menus.hidden": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "workbench.action.terminal.*",
+              "workbench.action.createTerminalEditor",
+              "workbench.action.createTerminalEditorSide",
+              "workbench.action.createTerminalEditorSameGroup",
+              "workbench.action.quickOpenTerm",
+              "workbench.action.tasks.*"
+            ],
+            "scope": "application",
+            "markdownDescription": "Commands to hide from the menus, the Command Palette and keyboard shortcuts. Each entry is a command id, or a prefix ending in `.*`. Hidden commands still run when other code calls them. Empty the list to bring everything back. Needs Towelwise AI."
+          },
+          "towelwise.menus.towelwise": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "command",
+                "title"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "The command id to run when the entry is chosen."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "The text shown. Put & before a letter to use it as the shortcut letter."
+                },
+                "group": {
+                  "type": "string",
+                  "description": "Entries with the same group sit together; a change of group draws a separator. Defaults to the previous entry's group."
+                },
+                "when": {
+                  "type": "string",
+                  "description": "A condition (a context-key expression). The entry shows only while it is true."
+                }
+              }
+            },
+            "default": [
+              {
+                "command": "towelwise.hyperspace.toggle",
+                "title": "Jump to Hyperspace",
+                "group": "hyperspace"
+              },
+              {
+                "command": "towelwise.hyperspace.edit",
+                "title": "Edit Hyperspace Layout",
+                "group": "hyperspace"
+              },
+              {
+                "command": "towelwise.layout.choose",
+                "title": "Choose Layout",
+                "group": "layout"
+              },
+              {
+                "command": "towelwise.layout.restore",
+                "title": "Restore Layout",
+                "group": "layout"
+              },
+              {
+                "command": "towelwise.shell.powershell",
+                "title": "PowerShell",
+                "group": "shells",
+                "when": "towelwise.shell.available.powershell"
+              },
+              {
+                "command": "towelwise.shell.powershellAdmin",
+                "title": "PowerShell (Admin)",
+                "group": "shells",
+                "when": "towelwise.shell.available.powershellAdmin"
+              },
+              {
+                "command": "towelwise.shell.cmd",
+                "title": "Command Prompt",
+                "group": "shells",
+                "when": "towelwise.shell.available.cmd"
+              },
+              {
+                "command": "towelwise.shell.cmdAdmin",
+                "title": "Command Prompt (Admin)",
+                "group": "shells",
+                "when": "towelwise.shell.available.cmdAdmin"
+              },
+              {
+                "command": "towelwise.shell.gitbash",
+                "title": "Git Bash",
+                "group": "shells",
+                "when": "towelwise.shell.available.gitbash"
+              },
+              {
+                "command": "towelwise.shell.pwsh",
+                "title": "PowerShell 7",
+                "group": "shells",
+                "when": "towelwise.shell.available.pwsh"
+              },
+              {
+                "command": "towelwise.shell.pwshAdmin",
+                "title": "PowerShell 7 (Admin)",
+                "group": "shells",
+                "when": "towelwise.shell.available.pwshAdmin"
+              },
+              {
+                "command": "towelwise.shell.wsl",
+                "title": "WSL",
+                "group": "shells",
+                "when": "towelwise.shell.available.wsl"
+              }
+            ],
+            "scope": "application",
+            "markdownDescription": "The entries of the Towelwise menu in the menu bar, in order. Each needs a `command` and a `title`; `group` separates sections and `when` shows an entry only while a condition holds. Entries with a mistake are skipped and named in the Towelwise output. Needs Towelwise AI."
+          }
+        }
       }
     ],
     "walkthroughs": [
