@@ -52,6 +52,38 @@
       {
         "command": "towelwise.layout.restore",
         "title": "Towelwise: Restore Layout"
+      },
+      {
+        "command": "towelwise.shell.powershell",
+        "title": "Towelwise: Open PowerShell"
+      },
+      {
+        "command": "towelwise.shell.powershellAdmin",
+        "title": "Towelwise: Open PowerShell (Admin)"
+      },
+      {
+        "command": "towelwise.shell.cmd",
+        "title": "Towelwise: Open Command Prompt"
+      },
+      {
+        "command": "towelwise.shell.cmdAdmin",
+        "title": "Towelwise: Open Command Prompt (Admin)"
+      },
+      {
+        "command": "towelwise.shell.gitbash",
+        "title": "Towelwise: Open Git Bash"
+      },
+      {
+        "command": "towelwise.shell.pwsh",
+        "title": "Towelwise: Open PowerShell 7"
+      },
+      {
+        "command": "towelwise.shell.pwshAdmin",
+        "title": "Towelwise: Open PowerShell 7 (Admin)"
+      },
+      {
+        "command": "towelwise.shell.wsl",
+        "title": "Towelwise: Open WSL"
       }
     ],
     "keybindings": [
@@ -219,6 +251,42 @@
           }
         ]
       }
-    ]
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "towelwise.shell.powershell",
+          "when": "towelwise.shell.available.powershell"
+        },
+        {
+          "command": "towelwise.shell.powershellAdmin",
+          "when": "towelwise.shell.available.powershellAdmin"
+        },
+        {
+          "command": "towelwise.shell.cmd",
+          "when": "towelwise.shell.available.cmd"
+        },
+        {
+          "command": "towelwise.shell.cmdAdmin",
+          "when": "towelwise.shell.available.cmdAdmin"
+        },
+        {
+          "command": "towelwise.shell.gitbash",
+          "when": "towelwise.shell.available.gitbash"
+        },
+        {
+          "command": "towelwise.shell.pwsh",
+          "when": "towelwise.shell.available.pwsh"
+        },
+        {
+          "command": "towelwise.shell.pwshAdmin",
+          "when": "towelwise.shell.available.pwshAdmin"
+        },
+        {
+          "command": "towelwise.shell.wsl",
+          "when": "towelwise.shell.available.wsl"
+        }
+      ]
+    }
   }
 }
