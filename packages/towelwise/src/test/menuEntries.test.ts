@@ -173,6 +173,10 @@ suite('menu entries validator', () => {
       'x == "a || b" && y',
       "x == 'it\\'s (fine'",
       "(a == '(') || (b =~ /\\)/)",
+      // Found in the second review: a / inside a character class does not end the expression.
+      'resourcePath =~ /[/)]/',
+      'resourcePath =~ /[/]foo\\(/',
+      'resourcePath =~ /[\\]/(]/ && foo',
     ]) {
       const { entries, problems } = validateEntries([{ command: 'x', title: 'T', when }]);
       assert.deepStrictEqual(problems, [], when);
@@ -181,7 +185,7 @@ suite('menu entries validator', () => {
   });
 
   test('a real mistake is still caught when quotes and regular expressions are present', () => {
-    for (const when of ["x == 'a(b' &&", "&& x == 'a'", "(x == 'a(b'", "x == 'a(b')) ", 'x =~ /a(/ || || y']) {
+    for (const when of ["x == 'a(b' &&", "&& x == 'a'", "(x == 'a(b'", "x == 'a(b')) ", 'x =~ /a(/ || || y', 'x =~ /[/)]/ &&', 'x =~ /[/]/ || || y']) {
       const { entries, problems } = validateEntries([{ command: 'x', title: 'T', when }]);
       assert.strictEqual(entries.length, 0, when);
       assert.strictEqual(problems.length, 1, when);

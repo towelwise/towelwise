@@ -32,7 +32,16 @@ function withoutValues(when: string): string {
       out += 'x';
     } else if (ch === '/' && /=~\s*$/.test(out)) {
       i++;
-      while (i < when.length && when[i] !== '/') i += when[i] === '\\' ? 2 : 1;
+      // A / inside a character class ([...]) is part of the expression, not its end.
+      let inClass = false;
+      while (i < when.length && (inClass || when[i] !== '/')) {
+        if (when[i] === '\\') i += 2;
+        else {
+          if (when[i] === '[') inClass = true;
+          else if (when[i] === ']') inClass = false;
+          i++;
+        }
+      }
       i++;
       while (/[a-z]/i.test(when[i] ?? '')) i++; // flags
       out += 'x';
