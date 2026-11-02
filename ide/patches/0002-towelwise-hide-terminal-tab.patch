@@ -1,0 +1,21 @@
+diff --git a/src/vs/workbench/contrib/terminal/browser/terminal.contribution.ts b/src/vs/workbench/contrib/terminal/browser/terminal.contribution.ts
+index 4a994f9f..a322b381 100644
+--- a/src/vs/workbench/contrib/terminal/browser/terminal.contribution.ts
++++ b/src/vs/workbench/contrib/terminal/browser/terminal.contribution.ts
+@@ -12,6 +12,7 @@ import { Extensions as DragAndDropExtensions, IDragAndDropContributionRegistry,
+ import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+ import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+ import { Registry } from '../../../../platform/registry/common/platform.js';
++import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+ import { ITerminalLogService } from '../../../../platform/terminal/common/terminal.js';
+ import { TerminalLogService } from '../../../../platform/terminal/common/terminalLogService.js';
+ import { registerTerminalPlatformConfiguration } from '../../../../platform/terminal/common/terminalPlatformConfiguration.js';
+@@ -119,6 +120,8 @@ Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews
+ 	containerIcon: terminalViewIcon,
+ 	canToggleVisibility: true,
+ 	canMoveView: true,
++	// Towelwise AI: the tab goes while Toggle Terminal is on the hidden list (see the Towelwise contribution).
++	when: ContextKeyExpr.not('towelwise.terminalTabHidden'),
+ 	ctorDescriptor: new SyncDescriptor(TerminalViewPane),
+ 	windowEnablement: WindowEnablement.Both,
+ 	openCommandActionDescriptor: {

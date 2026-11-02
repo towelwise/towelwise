@@ -1,0 +1,321 @@
+diff --git a/src/vs/platform/actions/common/actions.ts b/src/vs/platform/actions/common/actions.ts
+index f54769f2..8f200cc6 100644
+--- a/src/vs/platform/actions/common/actions.ts
++++ b/src/vs/platform/actions/common/actions.ts
+@@ -14,6 +14,7 @@ import { CommandsRegistry, ICommandService } from '../../commands/common/command
+ import { ContextKeyExpr, ContextKeyExpression, IContextKeyService } from '../../contextkey/common/contextkey.js';
+ import { createDecorator, ServicesAccessor } from '../../instantiation/common/instantiation.js';
+ import { IKeybindingRule, KeybindingsRegistry } from '../../keybinding/common/keybindingsRegistry.js';
++import { HiddenCommands } from '../../commands/common/hiddenCommands.js';
+ 
+ export interface IMenuItem {
+ 	command: ICommandAction;
+@@ -486,6 +487,16 @@ export const MenuRegistry: IMenuRegistry = new class implements IMenuRegistry {
+ 
+ 	readonly onDidChangeMenu: Event<IMenuRegistryChangeEvent> = this._onDidChangeMenu.event;
+ 
++	constructor() {
++		// Towelwise AI: what the person is shown changes when the hidden list does.
++		HiddenCommands.onDidChange(() => {
++			for (const id of this._menuItems.keys()) {
++				this._onDidChangeMenu.fire(MenuRegistryChangeEvent.for(id));
++			}
++			this._onDidChangeMenu.fire(MenuRegistryChangeEvent.for(MenuId.CommandPalette));
++		});
++	}
++
+ 	addCommand(command: ICommandAction): IDisposable {
+ 		this._commands.set(command.id, command);
+ 		this._onDidChangeMenu.fire(MenuRegistryChangeEvent.for(MenuId.CommandPalette));
+@@ -541,7 +552,26 @@ export const MenuRegistry: IMenuRegistry = new class implements IMenuRegistry {
+ 			// all commands by default
+ 			this._appendImplicitItems(result);
+ 		}
+-		return result;
++		// Towelwise AI: hidden commands are not offered (they still run). Filtered last, after the implicit
++		// Command Palette items are added, so they cannot come back that way.
++		return this._withoutHidden(result);
++	}
++
++	private _withoutHidden(items: Array<IMenuItem | ISubmenuItem>): Array<IMenuItem | ISubmenuItem> {
++		const kept: Array<IMenuItem | ISubmenuItem> = [];
++		for (const item of items) {
++			if (isIMenuItem(item)) {
++				if (HiddenCommands.isHidden(item.command.id)) {
++					continue;
++				}
++				if (item.alt && HiddenCommands.isHidden(item.alt.id)) {
++					kept.push({ ...item, alt: undefined });
++					continue;
++				}
++			}
++			kept.push(item);
++		}
++		return kept;
+ 	}
+ 
+ 	private _appendImplicitItems(result: Array<IMenuItem | ISubmenuItem>) {
+diff --git a/src/vs/platform/commands/common/hiddenCommands.ts b/src/vs/platform/commands/common/hiddenCommands.ts
+new file mode 100644
+index 00000000..f875e417
+--- /dev/null
++++ b/src/vs/platform/commands/common/hiddenCommands.ts
+@@ -0,0 +1,48 @@
++/*---------------------------------------------------------------------------------------------
++ *  Towelwise AI: commands hidden from menus, the Command Palette and default keyboard shortcuts.
++ *
++ *  The list comes from the `towelwise.menus.hidden` setting (see the Towelwise contribution). Hiding is not
++ *  disabling: commands still run when other code calls them. Only what the person is shown changes.
++ *--------------------------------------------------------------------------------------------*/
++
++import { Emitter, Event } from '../../../base/common/event.js';
++
++// The same list the built-in Towelwise extension ships as the setting's default. It applies from the start, so
++// nothing flashes on screen before the setting has been read; the setting then replaces it.
++export const DEFAULT_HIDDEN_COMMANDS: readonly string[] = [
++	'workbench.action.terminal.*',
++	'workbench.action.createTerminalEditor',
++	'workbench.action.createTerminalEditorSide',
++	'workbench.action.createTerminalEditorSameGroup',
++	'workbench.action.quickOpenTerm',
++	'workbench.action.tasks.*',
++];
++
++class HiddenCommandsImpl {
++
++	private patterns: readonly string[] = DEFAULT_HIDDEN_COMMANDS;
++	private readonly _onDidChange = new Emitter<void>();
++
++	readonly onDidChange: Event<void> = this._onDidChange.event;
++
++	// An entry is an exact command id, or a prefix ending in `*`.
++	set(patterns: readonly string[]): void {
++		const next = patterns.filter(p => typeof p === 'string' && p.length > 0);
++		if (next.length === this.patterns.length && next.every((p, i) => p === this.patterns[i])) {
++			return;
++		}
++		this.patterns = next;
++		this._onDidChange.fire();
++	}
++
++	isHidden(commandId: string): boolean {
++		for (const pattern of this.patterns) {
++			if (pattern.endsWith('*') ? commandId.startsWith(pattern.slice(0, -1)) : commandId === pattern) {
++				return true;
++			}
++		}
++		return false;
++	}
++}
++
++export const HiddenCommands = new HiddenCommandsImpl();
+diff --git a/src/vs/platform/keybinding/common/keybindingsRegistry.ts b/src/vs/platform/keybinding/common/keybindingsRegistry.ts
+index 0d95d0bf..ab88c80f 100644
+--- a/src/vs/platform/keybinding/common/keybindingsRegistry.ts
++++ b/src/vs/platform/keybinding/common/keybindingsRegistry.ts
+@@ -6,6 +6,7 @@
+ import { decodeKeybinding, Keybinding } from '../../../base/common/keybindings.js';
+ import { OperatingSystem, OS } from '../../../base/common/platform.js';
+ import { CommandsRegistry, ICommandHandler, ICommandMetadata } from '../../commands/common/commands.js';
++import { HiddenCommands } from '../../commands/common/hiddenCommands.js';
+ import { ContextKeyExpression } from '../../contextkey/common/contextkey.js';
+ import { Registry } from '../../registry/common/platform.js';
+ import { combinedDisposable, DisposableStore, IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+@@ -202,12 +203,16 @@ class KeybindingsRegistryImpl implements IKeybindingsRegistry {
+ 			this._cachedMergedKeybindings = Array.from(this._coreKeybindings).concat(this._extensionKeybindings);
+ 			this._cachedMergedKeybindings.sort(sorter);
+ 		}
+-		return this._cachedMergedKeybindings.slice(0);
++		// Towelwise AI: a hidden command keeps its removal rules (a command starting with '-') but loses its defaults.
++		return this._cachedMergedKeybindings.filter(item => !item.command || item.command.startsWith('-') || !HiddenCommands.isHidden(item.command));
+ 	}
+ 
+ 	public getDefaultKeybindingsForOS(os: OperatingSystem): IKeybindingItem[] {
+ 		const result: IKeybindingItem[] = [];
+ 		for (const rule of this._coreKeybindingRules) {
++			if (HiddenCommands.isHidden(rule.id)) {
++				continue;
++			}
+ 			const actualKb = KeybindingsRegistryImpl.bindToPlatform(rule, os);
+ 
+ 			if (actualKb && actualKb.primary) {
+diff --git a/src/vs/workbench/contrib/towelwise/browser/towelwise.contribution.ts b/src/vs/workbench/contrib/towelwise/browser/towelwise.contribution.ts
+new file mode 100644
+index 00000000..d95bde19
+--- /dev/null
++++ b/src/vs/workbench/contrib/towelwise/browser/towelwise.contribution.ts
+@@ -0,0 +1,141 @@
++/*---------------------------------------------------------------------------------------------
++ *  Towelwise AI: the hide list and the Towelwise menu, both read from settings that the built-in Towelwise
++ *  extension ships. The settings are the whole interface: this file holds no list of its own beyond the
++ *  startup default in hiddenCommands.ts, and no menu contents.
++ *--------------------------------------------------------------------------------------------*/
++
++import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
++import { HiddenCommands } from '../../../../platform/commands/common/hiddenCommands.js';
++import { MenuId, MenuRegistry } from '../../../../platform/actions/common/actions.js';
++import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
++import { ContextKeyExpr, ContextKeyExpression, IContextKey, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
++import { ILogService } from '../../../../platform/log/common/log.js';
++import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
++
++const HIDDEN_SETTING = 'towelwise.menus.hidden';
++const MENU_SETTING = 'towelwise.menus.towelwise';
++
++// The Terminal tab in the bottom panel shows only while the Toggle Terminal command is not hidden.
++const TERMINAL_TAB_HIDDEN = new RawContextKey<boolean>('towelwise.terminalTabHidden', false);
++const TOGGLE_TERMINAL = 'workbench.action.terminal.toggleTerminal';
++
++const MenubarTowelwiseMenu = new MenuId('MenubarTowelwiseMenu');
++
++// One entry of the menu setting, as the extension's contract defines it.
++interface MenuEntry {
++	command: string;
++	title: string;
++	group: string;
++	when: ContextKeyExpression | undefined;
++}
++
++class TowelwiseContribution extends Disposable implements IWorkbenchContribution {
++
++	static readonly ID = 'workbench.contrib.towelwise';
++
++	private readonly terminalTabHidden: IContextKey<boolean>;
++	private readonly menuItems = this._register(new DisposableStore());
++
++	constructor(
++		@IConfigurationService private readonly configurationService: IConfigurationService,
++		@IContextKeyService contextKeyService: IContextKeyService,
++		@ILogService private readonly logService: ILogService,
++	) {
++		super();
++		this.terminalTabHidden = TERMINAL_TAB_HIDDEN.bindTo(contextKeyService);
++
++		// The Towelwise menu sits between Terminal and Help in the menu bar. The mnemonic is the W, since T is Terminal's.
++		this._register(MenuRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
++			submenu: MenubarTowelwiseMenu,
++			title: { value: 'Towelwise', original: 'Towelwise', mnemonicTitle: 'To&&welwise' },
++			order: 7.5
++		}));
++
++		this.applyHidden();
++		this.applyMenu();
++		this._register(this.configurationService.onDidChangeConfiguration(e => {
++			if (e.affectsConfiguration(HIDDEN_SETTING)) {
++				this.applyHidden();
++			}
++			if (e.affectsConfiguration(MENU_SETTING)) {
++				this.applyMenu();
++			}
++		}));
++		this._register(HiddenCommands.onDidChange(() => this.terminalTabHidden.set(HiddenCommands.isHidden(TOGGLE_TERMINAL))));
++		this.terminalTabHidden.set(HiddenCommands.isHidden(TOGGLE_TERMINAL));
++	}
++
++	private applyHidden(): void {
++		const value = this.configurationService.getValue<unknown>(HIDDEN_SETTING);
++		if (Array.isArray(value)) {
++			HiddenCommands.set(value.filter((v): v is string => typeof v === 'string'));
++		}
++	}
++
++	// Rebuilds the whole menu from the setting. Entries with a mistake are skipped and named in the log.
++	private applyMenu(): void {
++		this.menuItems.clear();
++		const raw = this.configurationService.getValue<unknown>(MENU_SETTING);
++		if (!Array.isArray(raw)) {
++			if (raw !== undefined) {
++				this.logService.warn(`[towelwise] ${MENU_SETTING} must be a list of entries; the menu is empty`);
++			}
++			return;
++		}
++
++		const entries: MenuEntry[] = [];
++		raw.forEach((item: unknown, index) => {
++			const entry = this.readEntry(item, index + 1, entries[entries.length - 1]?.group);
++			if (entry) {
++				entries.push(entry);
++			}
++		});
++
++		// Groups keep the order they first appear in, and entries keep the array order: both are given explicitly,
++		// because the menu would otherwise sort them by name.
++		const groupNumber = new Map<string, number>();
++		entries.forEach((entry, order) => {
++			if (!groupNumber.has(entry.group)) {
++				groupNumber.set(entry.group, groupNumber.size);
++			}
++			// In the setting, one & marks the shortcut letter; the menu's own form uses two.
++			const plain = entry.title.replace(/&(?!&)/g, '');
++			this.menuItems.add(MenuRegistry.appendMenuItem(MenubarTowelwiseMenu, {
++				command: { id: entry.command, title: { value: plain, original: plain, mnemonicTitle: entry.title.replace(/&(?!&)/g, '&&') } },
++				when: entry.when,
++				group: `${String(groupNumber.get(entry.group)).padStart(2, '0')}_${entry.group}`,
++				order
++			}));
++		});
++	}
++
++	private readEntry(item: unknown, position: number, previousGroup: string | undefined): MenuEntry | undefined {
++		const skip = (why: string) => {
++			this.logService.warn(`[towelwise] ${MENU_SETTING}: entry ${position} ${why}; skipped`);
++			return undefined;
++		};
++		if (typeof item !== 'object' || item === null || Array.isArray(item)) {
++			return skip('is not an object');
++		}
++		const { command, title, group, when } = item as Record<string, unknown>;
++		if (typeof command !== 'string' || command.trim() === '') {
++			return skip('needs a non-empty text "command"');
++		}
++		if (typeof title !== 'string' || title.trim() === '') {
++			return skip('needs a non-empty text "title"');
++		}
++		if (group !== undefined && typeof group !== 'string') {
++			return skip('has a "group" that is not text');
++		}
++		let condition: ContextKeyExpression | undefined;
++		if (when !== undefined) {
++			condition = typeof when === 'string' ? ContextKeyExpr.deserialize(when) : undefined;
++			if (condition === undefined) {
++				return skip('has a "when" that is not a valid condition');
++			}
++		}
++		return { command, title, group: group ?? previousGroup ?? '', when: condition };
++	}
++}
++
++registerWorkbenchContribution2(TowelwiseContribution.ID, TowelwiseContribution, WorkbenchPhase.BlockStartup);
+diff --git a/src/vs/workbench/services/keybinding/browser/keybindingService.ts b/src/vs/workbench/services/keybinding/browser/keybindingService.ts
+index 5db49b2b..40617b3b 100644
+--- a/src/vs/workbench/services/keybinding/browser/keybindingService.ts
++++ b/src/vs/workbench/services/keybinding/browser/keybindingService.ts
+@@ -28,6 +28,7 @@ import { dirname } from '../../../../base/common/resources.js';
+ import { ILocalizedString, isLocalizedString } from '../../../../platform/action/common/action.js';
+ import { MenuRegistry } from '../../../../platform/actions/common/actions.js';
+ import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
++import { HiddenCommands } from '../../../../platform/commands/common/hiddenCommands.js';
+ import { ContextKeyExpr, ContextKeyExpression, IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+ import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
+ import { FileOperation, IFileService } from '../../../../platform/files/common/files.js';
+@@ -224,6 +225,8 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
+ 			logService.debug('User keybindings changed');
+ 			this.updateResolver();
+ 		}));
++		// Towelwise AI: shortcuts of hidden commands come and go with the hidden list.
++		this._register(HiddenCommands.onDidChange(() => this.updateResolver()));
+ 
+ 		keybindingsExtPoint.setHandler((extensions) => {
+ 
+diff --git a/src/vs/workbench/workbench.common.main.ts b/src/vs/workbench/workbench.common.main.ts
+index b2aaf10..6c6935e 100644
+--- a/src/vs/workbench/workbench.common.main.ts
++++ b/src/vs/workbench/workbench.common.main.ts
+@@ -483,4 +483,7 @@ import './contrib/editTelemetry/browser/editTelemetry.contribution.js';
+ // Opener
+ import './contrib/opener/browser/opener.contribution.js';
+ 
++// Towelwise AI
++import './contrib/towelwise/browser/towelwise.contribution.js';
++
+ //#endregion

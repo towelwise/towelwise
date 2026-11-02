@@ -47,6 +47,12 @@ mv product.json.tmp product.json
 
 # Our own app icon and Windows tiles replace VSCodium's (a file overlay, not a patch).
 cp "${IDE_DIR}"/icons/win32/* src/stable/resources/win32/
+# Our core patches go in VSCodium's own hook for extra patches, which its prepare step applies after its
+# own. This must stay after the reset and clean above, or the clean would delete them. See ide/patches/README.md.
+if compgen -G "${IDE_DIR}/patches/*.patch" > /dev/null; then
+  mkdir -p patches/user
+  cp "${IDE_DIR}"/patches/*.patch patches/user/
+fi
 # The small logo at the left of the title bar.
 cp "${IDE_DIR}/icons/code-icon.svg" src/stable/src/vs/workbench/browser/media/code-icon.svg
 
