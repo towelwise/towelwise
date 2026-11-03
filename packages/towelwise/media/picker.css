@@ -131,3 +131,28 @@ button.primary {
 .status.error {
   color: var(--vscode-errorForeground);
 }
+
+.sizes h2 {
+  font-size: 1.1em;
+  margin: 16px 0 4px;
+}
+
+.size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.size-name {
+  min-width: 12em;
+}
+
+.size input {
+  width: 5em;
+  padding: 3px 6px;
+  font: inherit;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+}

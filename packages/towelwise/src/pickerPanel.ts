@@ -32,6 +32,7 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
       type: 'state',
       items: draft.items(),
       saved: draft.savedOptions(),
+      sizes: draft.sizesView(),
       hyperspaceOn: isActive(storageDir),
       ...extra,
     });
@@ -43,6 +44,7 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
       try {
         switch (message.type) {
           case 'ready':
+            await draft.refreshLive();
             await send();
             break;
           case 'choose':
@@ -51,6 +53,14 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
             break;
           case 'fullScreen':
             draft.setFullScreen(message.on);
+            await send();
+            break;
+          case 'useCurrentSizes':
+            await draft.useCurrentSizes();
+            await send();
+            break;
+          case 'size':
+            await draft.setSize(message.part, message.value);
             await send();
             break;
           case 'save':

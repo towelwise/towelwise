@@ -49,4 +49,14 @@ suite('towelwise.towelwise', () => {
       assert.strictEqual(props[name].scope, undefined);
     }
   });
+
+  test('the sizes setting accepts proportions and an orientation, and nothing else', () => {
+    const configuration = vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON.contributes.configuration;
+    const sizes = configuration.find((c: { title: string }) => c.title === 'Towelwise: Hyperspace').properties['towelwise.hyperspace.sizes'];
+    assert.strictEqual(sizes.type, 'object');
+    assert.deepStrictEqual(sizes.default, {});
+    assert.strictEqual(sizes.scope, undefined);
+    assert.strictEqual(sizes.additionalProperties, false);
+    assert.deepStrictEqual(Object.keys(sizes.properties), ['sidebar', 'auxiliarybar', 'panel', 'panelOrientation']);
+  });
 });

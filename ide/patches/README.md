@@ -29,6 +29,16 @@ Each patch has a note below: why it exists, what it touches, and how it fared at
 
 **Known limits.** The subtitle keeps its original localization key, so a translated build would still show the translation of "Editing evolved"; Towelwise ships in English only for now. VSCodium already edits `gettingStarted.ts`; this patch is made against the file as VSCodium leaves it and applies after theirs.
 
+## 0003 layout bridge (`0003-towelwise-layout-bridge.patch`)
+
+**Why.** Setting the widths and heights of the side bars and panel needs the layout service, which no extension API reaches ([decision 0003](../../docs/decisions/0003-hyperspace-never-reads-or-reopens-layout-state.md), [0005](../../docs/decisions/0005-patch-core-only-when-the-extension-cannot.md)). Spec: [phase-4-sizes.md](../../.work/specs/phase-4-sizes.md).
+
+**What it does.** Two internal commands, a bridge with no feature logic. `_towelwise.layout.state` returns, for the main window it was called from, each part's visibility and size in pixels (`sidebar`, `auxiliarybar`, `panel`), the panel's position and the window's size. `_towelwise.layout.setSize(part, pixels)` sets one part along its one sizing dimension (the panel's by its position) and returns the size the grid ended up with. The leading underscore keeps them out of the palette; it is not an access boundary (any extension can already resize these parts with the built-in increase and decrease commands).
+
+**What it touches (2 files; +45 lines).** New `workbench/contrib/towelwise/browser/layoutBridge.contribution.ts`, and one import added in `workbench/workbench.common.main.ts` after the one from 0001, so it applies only after 0001.
+
+**Known limits.** Whether the grid gives exactly the requested size is checked in the built app.
+
 ## Dropped: hiding the Terminal tab (an earlier patch, also numbered `0002`)
 
 The first version had a second patch giving the Terminal view in the bottom panel a `when` that went false while Toggle Terminal was hidden, so the tab disappeared. Review of the pinned source (2026-11-02) showed that a view whose `when` is false is inactive, and `ViewsService.openView` returns nothing for an inactive view, so a terminal created in the bottom panel by an extension (`MainThreadTerminalService.$show` to `TerminalGroupService.showPanel`) could no longer be shown. Terminals in the editor area (such as Claude Code's terminal mode) were not affected, but the panel case could not be accepted. The spec's criterion 8 allowed this fallback, so the patch was dropped and the Terminal tab stays. Anyone who wants it gone can hide it from the panel's tab menu. Deleting a file from `ide/patches/` is all it took: the build copies whatever is there.
@@ -41,3 +51,4 @@ The first version had a second patch giving the Terminal view in the bottom pane
 | VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0002 | Forward `git apply --check` on the file as VSCodium leaves it: yes. Not yet in a full build | Nothing; first version | About 1 hour |
 | VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0001 | Yes: applied in four full builds (about 14 minutes each) and by forward `git apply` on pristine files and on the registration file as VSCodium edits it | Nothing from upstream; first version. Found in use and fixed in the patch: a first-launch timing bug, a missing hide pattern (`terminal.integrated.*`), and, from review, repeated groups reordering the menu and an all-conditional menu that stayed absent | Spike about 3 hours including four builds |
 | VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0001 (empty default hide list) | Yes: one full build (about 14 minutes) | Nothing; the default list lines were removed from the patch. Visual checks by the owner on 2026-11-03: Run and Terminal menus, View's Appearance and Editor Layout, the Towelwise menu on first launch, Ctrl+Backquote and the palette's Terminal, Tasks and Debug commands all back | About 20 minutes |
+| VSCodium 1.143.17232 (Code-OSS 1.143.1) | 0003 | Yes: applied in one full build (13m24s, 2026-11-03) after 0001; also `git apply --check` and a type-check of the new file. Owner checked the size controls in the built app on 2026-11-03 (Use current sizes and Save); the jump, restore and window-routing checks are still to do | Nothing; first version (one type fix while writing: the parts are `SINGLE_WINDOW_PARTS`) | About 30 minutes |

@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { AREAS, CHROME, restore, toggle } from '../hyperspace';
 import { Draft, OPTIONS, pageHtml, parseMessage } from '../picker';
+import { LayoutState } from '../sizes';
 
 const GLOBAL = vscode.ConfigurationTarget.Global;
 const WORKSPACE = vscode.ConfigurationTarget.Workspace;
@@ -318,5 +319,200 @@ suite('picker', () => {
     assert.match(html, /<script nonce="n0nce" src="vscode-webview:\/\/abc\/picker\.js">/);
     assert.ok(!/https?:\/\//.test(html), 'the page names a network address');
     assert.ok(!/unsafe-inline|unsafe-eval/.test(html.replace(/style-src[^;"]*unsafe-inline/, '')), 'script policy is loose');
+  });
+
+  // Sizes: a stand-in window and a recording writer, so nothing touches the real setting.
+  const sizeEnv = (state: LayoutState | undefined) => {
+    const writes: unknown[] = [];
+    return { writes, env: { read: async () => state, write: async (value: unknown) => void writes.push(value) } };
+  };
+  const live = (over: Partial<LayoutState> = {}): LayoutState => ({
+    window: { width: 2000, height: 1000 },
+    panelPosition: 'bottom',
+    parts: {
+      sidebar: { visible: true, size: 300 },
+      auxiliarybar: { visible: true, size: 400 },
+      panel: { visible: true, size: 250 },
+    },
+    ...over,
+  });
+  const percentOf = (draft: Draft, part: string) => draft.sizesView().rows.find((r) => r.part === part)?.percent;
+
+  test('Use current sizes fills the visible parts as percentages, and a hidden part keeps its value', async () => {
+    const { env } = sizeEnv(live());
+    const draft = new Draft(undefined, env as never);
+    await draft.useCurrentSizes();
+    assert.strictEqual(percentOf(draft, 'sidebar'), 15);
+    assert.strictEqual(percentOf(draft, 'auxiliarybar'), 20);
+    assert.strictEqual(percentOf(draft, 'panel'), 25);
+    assert.strictEqual(draft.sizesView().panelOrientation, 'down');
+
+    const hiddenAux = live({ parts: { ...live().parts, auxiliarybar: { visible: false, size: 0 }, sidebar: { visible: true, size: 400 } } });
+    const again = sizeEnv(hiddenAux);
+    (env as { read: unknown }).read = again.env.read;
+    await draft.useCurrentSizes();
+    assert.strictEqual(percentOf(draft, 'sidebar'), 20);
+    assert.strictEqual(percentOf(draft, 'auxiliarybar'), 20);
+    assert.match(draft.sizesView().note ?? '', /Secondary side bar/);
+  });
+
+  test('Save writes captured sizes as proportions, with the panel orientation, and no range check', async () => {
+    const { env, writes } = sizeEnv(live({ parts: { ...live().parts, sidebar: { visible: true, size: 1900 } } }));
+    const draft = new Draft(undefined, env as never);
+    await draft.useCurrentSizes();
+    const result = await draft.save();
+    assert.deepStrictEqual(result.written, ['sizes']);
+    assert.deepStrictEqual(writes, [{ sidebar: 0.95, auxiliarybar: 0.2, panel: 0.25, panelOrientation: 'down' }]);
+    assert.deepStrictEqual(draft.savedOptions(), ['sizes']);
+    // Nothing changed since: a second Save writes nothing.
+    assert.deepStrictEqual((await draft.save()).written, []);
+  });
+
+  test('typed values outside 5 to 80, or not numbers, are refused and nothing else is written', async () => {
+    for (const text of ['4', '81', 'wide', '-3']) {
+      const { env, writes } = sizeEnv(live());
+      const { write, writes: optionWrites } = spy();
+      const draft = new Draft(write, env as never);
+      await draft.useCurrentSizes();
+      draft.choose('hideStatusBar', 'keep');
+      await draft.setSize('sidebar', text);
+      const result = await draft.save();
+      assert.strictEqual(result.failed?.option, 'sizes', text);
+      assert.match(result.failed?.message ?? '', /5 and 80/);
+      assert.deepStrictEqual(writes, []);
+      assert.deepStrictEqual(optionWrites, []);
+    }
+  });
+
+  test('the editor floor applies only when a side bar was typed, and editing one value types only that one', async () => {
+    const { env, writes } = sizeEnv(live({ parts: { ...live().parts, sidebar: { visible: true, size: 900 }, auxiliarybar: { visible: true, size: 900 } } }));
+    const draft = new Draft(undefined, env as never);
+    await draft.useCurrentSizes();
+    // 45% + 45% captured: allowed.
+    assert.deepStrictEqual((await draft.save()).written, ['sizes']);
+    await draft.setSize('panel', '30');
+    assert.deepStrictEqual((await draft.save()).written, ['sizes']);
+    await draft.setSize('sidebar', '40');
+    const refused = await draft.save();
+    assert.match(refused.failed?.message ?? '', /20 percent/);
+    assert.deepStrictEqual(draft.sizesView().rows.map((r) => r.typed), [true, false, true]);
+    assert.strictEqual(writes.length, 2);
+  });
+
+  test('a cleared size is left out of what is saved, and clearing everything resets the setting', async () => {
+    const { env, writes } = sizeEnv(live());
+    const draft = new Draft(undefined, env as never);
+    await draft.useCurrentSizes();
+    await draft.setSize('panel', '');
+    await draft.setSize('auxiliarybar', '');
+    await draft.save();
+    assert.deepStrictEqual(writes[0], { sidebar: 0.15 });
+    await draft.setSize('sidebar', '');
+    await draft.save();
+    assert.strictEqual(writes[1], undefined);
+    assert.strictEqual(writes.length, 2);
+  });
+
+  test('a typed panel size takes the side the panel is on now, without Use current sizes', async () => {
+    const { env, writes } = sizeEnv(live({ panelPosition: 'right' }));
+    const draft = new Draft(undefined, env as never);
+    await draft.setSize('panel', '30');
+    assert.deepStrictEqual((await draft.save()).written, ['sizes']);
+    assert.deepStrictEqual(writes, [{ panel: 0.3, panelOrientation: 'across' }]);
+  });
+
+  test('a typed panel size replaces an old side when the panel has since moved', async () => {
+    let position: 'bottom' | 'right' = 'bottom';
+    const writes: unknown[] = [];
+    const env = { read: async () => live({ panelPosition: position }), write: async (v: unknown) => void writes.push(v) };
+    const draft = new Draft(undefined, env as never);
+    await draft.setSize('panel', '30');
+    await draft.save();
+    position = 'right';
+    await draft.setSize('panel', '40');
+    await draft.save();
+    assert.deepStrictEqual(writes, [
+      { panel: 0.3, panelOrientation: 'down' },
+      { panel: 0.4, panelOrientation: 'across' },
+    ]);
+  });
+
+  test('a typed panel size with no live read and no known side is refused', async () => {
+    const { env, writes } = sizeEnv(undefined);
+    const draft = new Draft(undefined, env as never);
+    await draft.setSize('panel', '30');
+    assert.match((await draft.save()).failed?.message ?? '', /which side/);
+    assert.deepStrictEqual(writes, []);
+  });
+
+  test('without the bridge the controls say sizes need Towelwise AI, and nothing throws', async () => {
+    const { env } = sizeEnv(undefined);
+    const draft = new Draft(undefined, env as never);
+    await draft.refreshLive();
+    assert.strictEqual(draft.sizesView().available, false);
+    assert.match(draft.sizesView().note ?? '', /Towelwise AI/);
+    await draft.useCurrentSizes();
+    assert.strictEqual(draft.sizesView().available, false);
+    assert.deepStrictEqual((await draft.save()).written, []);
+  });
+
+  test('size messages from the page are checked', () => {
+    assert.deepStrictEqual(parseMessage({ type: 'useCurrentSizes' }), { type: 'useCurrentSizes' });
+    assert.deepStrictEqual(parseMessage({ type: 'size', part: 'panel', value: '30' }), { type: 'size', part: 'panel', value: '30' });
+    for (const bad of [{ type: 'size', part: 'editor', value: '30' }, { type: 'size', part: 'panel', value: 30 }, { type: 'size', part: 'panel' }]) {
+      assert.strictEqual(parseMessage(bad), undefined, JSON.stringify(bad));
+    }
+  });
+
+  test('a Save pressed while a panel size is still reading the panel side waits for it', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const writes: unknown[] = [];
+    let first = true;
+    const env = {
+      read: async () => {
+        // The constructor-time state is not read; the first read is the one the edit starts, and it is held open.
+        if (first) {
+          first = false;
+          await gate;
+        }
+        return live({ panelPosition: 'right' });
+      },
+      write: async (v: unknown) => void writes.push(v),
+    };
+    await config().update(key('sizes'), { panel: 0.2, panelOrientation: 'down' }, GLOBAL);
+    try {
+      const draft = new Draft(undefined, env as never);
+      // The page sends the edit and then Save without waiting between them.
+      const edit = draft.setSize('panel', '30');
+      const save = draft.save();
+      release();
+      await edit;
+      const result = await save;
+      assert.deepStrictEqual(result.written, ['sizes']);
+      assert.deepStrictEqual(writes, [{ panel: 0.3, panelOrientation: 'across' }]);
+    } finally {
+      await config().update(key('sizes'), undefined, GLOBAL);
+    }
+  });
+
+  test('with no saved side, an overlapping edit and Save still save the typed panel size', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const writes: unknown[] = [];
+    const env = {
+      read: async () => {
+        await gate;
+        return live();
+      },
+      write: async (v: unknown) => void writes.push(v),
+    };
+    const draft = new Draft(undefined, env as never);
+    const edit = draft.setSize('panel', '30');
+    const save = draft.save();
+    release();
+    await edit;
+    assert.deepStrictEqual((await save).written, ['sizes']);
+    assert.deepStrictEqual(writes, [{ panel: 0.3, panelOrientation: 'down' }]);
   });
 });

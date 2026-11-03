@@ -1,0 +1,61 @@
+diff --git a/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts b/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts
+new file mode 100644
+index 0000000..812bf22
+--- /dev/null
++++ b/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts
+@@ -0,0 +1,44 @@
++/*---------------------------------------------------------------------------------------------
++ *  Towelwise AI: a bridge that lets the built-in Towelwise extension read and set the sizes of the side bars
++ *  and the panel. It holds no feature logic: it reports the layout service's state and sets one size.
++ *  The leading underscore keeps the commands out of the Command Palette; it is not an access boundary.
++ *--------------------------------------------------------------------------------------------*/
++
++import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
++import { IWorkbenchLayoutService, Parts, SINGLE_WINDOW_PARTS, isHorizontal, positionToString } from '../../../services/layout/browser/layoutService.js';
++
++const PARTS: { [name: string]: SINGLE_WINDOW_PARTS } = {
++	sidebar: Parts.SIDEBAR_PART,
++	auxiliarybar: Parts.AUXILIARYBAR_PART,
++	panel: Parts.PANEL_PART
++};
++
++// The accessor belongs to the window that ran the command, so these always act on that main window.
++CommandsRegistry.registerCommand('_towelwise.layout.state', accessor => {
++	const layout = accessor.get(IWorkbenchLayoutService);
++	const parts: { [name: string]: { visible: boolean; size: number } } = {};
++	const position = layout.getPanelPosition();
++	for (const [name, part] of Object.entries(PARTS)) {
++		const visible = layout.isVisible(part);
++		const size = layout.getSize(part);
++		parts[name] = { visible, size: name === 'panel' && isHorizontal(position) ? size.height : size.width };
++	}
++	const { width, height } = layout.mainContainerDimension;
++	return { window: { width, height }, panelPosition: positionToString(position), parts };
++});
++
++// Sets one part's size along its one sizing dimension (the panel's by its position, as resizePart does).
++// Returns the size the grid ended up with, which may differ from the request (minimum sizes, neighbours).
++CommandsRegistry.registerCommand('_towelwise.layout.setSize', (accessor, name: unknown, pixels: unknown) => {
++	const part = typeof name === 'string' && Object.prototype.hasOwnProperty.call(PARTS, name) ? PARTS[name] : undefined;
++	if (part === undefined || typeof pixels !== 'number' || !Number.isFinite(pixels) || pixels < 0) {
++		throw new Error('_towelwise.layout.setSize needs a part (sidebar, auxiliarybar or panel) and a size in pixels');
++	}
++	const layout = accessor.get(IWorkbenchLayoutService);
++	const current = layout.getSize(part);
++	const alongHeight = part === Parts.PANEL_PART && isHorizontal(layout.getPanelPosition());
++	layout.setSize(part, alongHeight ? { width: current.width, height: Math.round(pixels) } : { width: Math.round(pixels), height: current.height });
++	const after = layout.getSize(part);
++	return alongHeight ? after.height : after.width;
++});
++
+diff --git a/src/vs/workbench/workbench.common.main.ts b/src/vs/workbench/workbench.common.main.ts
+index dcaa486..dcbd623 100644
+--- a/src/vs/workbench/workbench.common.main.ts
++++ b/src/vs/workbench/workbench.common.main.ts
+@@ -482,5 +482,6 @@ import './contrib/opener/browser/opener.contribution.js';
+ 
+ // Towelwise AI
+ import './contrib/towelwise/browser/towelwise.contribution.js';
++import './contrib/towelwise/browser/layoutBridge.contribution.js';
+ 
+ //#endregion

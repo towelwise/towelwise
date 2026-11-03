@@ -68,6 +68,35 @@ function render(state) {
   if (full.overridden) label.append(el('span', 'note', 'set by this project'));
   app.append(label);
 
+  // Sizes: percentages of the window. Typing is sent when the field is committed, so a redraw never eats keystrokes.
+  if (state.sizes) {
+    const box = el('section', 'sizes');
+    box.append(el('h2', '', 'Sizes'));
+    if (!state.sizes.available) {
+      box.append(el('p', 'info', state.sizes.note || 'Sizes need Towelwise AI.'));
+    } else {
+      box.append(el('p', 'legend', 'Percent of the window. Drag the side bars and panel the way you like, then press Use current sizes. Leave a box empty to keep that part as it is.'));
+      const use = el('button', '', 'Use current sizes');
+      use.dataset.key = 'useCurrentSizes';
+      use.addEventListener('click', () => vscodeApi.postMessage({ type: 'useCurrentSizes' }));
+      box.append(use);
+      for (const row of state.sizes.rows) {
+        const label = el('label', 'size');
+        const input = el('input');
+        input.type = 'text';
+        input.inputMode = 'decimal';
+        input.dataset.key = `size-${row.part}`;
+        input.value = row.percent === undefined ? '' : String(Math.round(row.percent * 10) / 10);
+        input.addEventListener('change', () => vscodeApi.postMessage({ type: 'size', part: row.part, value: input.value }));
+        const suffix = row.part === 'panel' && state.sizes.panelOrientation ? (state.sizes.panelOrientation === 'down' ? '% of the height' : '% of the width') : '% of the width';
+        label.append(el('span', 'size-name', row.label), input, el('span', '', suffix));
+        box.append(label);
+      }
+      if (state.sizes.note) box.append(el('p', 'info', state.sizes.note));
+    }
+    app.append(box);
+  }
+
   if (state.hyperspaceOn) {
     app.append(el('p', 'info', 'Hyperspace is on now. What you save applies from the next jump; this session is unchanged.'));
   }
@@ -82,7 +111,7 @@ function render(state) {
   actions.append(save, cancel);
   app.append(actions);
 
-  const labelOf = (option) => state.items.find((i) => i.option === option)?.label ?? option;
+  const labelOf = (option) => (option === 'sizes' ? 'Sizes' : state.items.find((i) => i.option === option)?.label ?? option);
   const status = el('p', 'status');
   status.setAttribute('role', 'status');
   if (lastResult) {

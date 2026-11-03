@@ -1,6 +1,6 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
-import { isActive, restore, toggle } from './hyperspace';
+import { isActive, restore, setLog, toggle } from './hyperspace';
 import { applyOnStartup, chooseLayout, liveVsCode, restoreLayout } from './layout';
 import { logMenuProblems } from './menuEntries';
 import { openPicker } from './pickerPanel';
@@ -14,6 +14,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // A quiet record of what Restore ran, since VS Code cannot say whether a command had any visible effect.
   const channel = vscode.window.createOutputChannel('Towelwise');
   const log = (line: string) => channel.appendLine(`${new Date().toISOString()} ${line}`);
+  setLog(log);
   context.subscriptions.push(channel);
 
   // The Towelwise menu is drawn by the IDE from this setting; a mistake in it is named here, not silent.

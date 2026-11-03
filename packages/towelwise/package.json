@@ -144,6 +144,18 @@
             "type": "boolean",
             "default": false,
             "description": "Also enter true full screen in hyperspace, and leave it on restore. VS Code cannot report whether the window is already full screen, so start from a windowed window."
+          },
+          "towelwise.hyperspace.sizes": {
+            "type": "object",
+            "default": {},
+            "description": "The widths and heights hyperspace sets, as proportions of the window from 0 to 1: the primary side bar (sidebar) and secondary side bar (auxiliarybar) widths, and the bottom panel (panel) with its orientation (panelOrientation: across when the panel is left or right, down when top or bottom). Set it from Edit Hyperspace Layout. Parts left out keep their size.",
+            "properties": {
+              "sidebar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "auxiliarybar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "panel": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "panelOrientation": { "enum": ["across", "down"] }
+            },
+            "additionalProperties": false
           }
         }
       },
