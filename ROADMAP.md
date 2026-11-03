@@ -24,8 +24,8 @@ This is the working roadmap: the order things get built, and what "done" means f
 | 0 | Claim the names | Done |
 | 1 | Set up the workshop | Done |
 | 2 | Extension groundwork (hyperspace, layout, walkthrough) | Done; becomes the built-in extension |
-| 3 | **First build** of Towelwise AI | Next |
-| 4 | **The layout editor** and locked hyperspace | — |
+| 3 | **First build** of Towelwise AI | Done (2026-11-03); the timed upstream update is standing upkeep |
+| 4 | **The layout editor** and locked hyperspace | Next |
 | 5 | The memory experiment (Hindsight on Windows) | Can run alongside Phase 4 |
 | 6 | **Towelwise Recall**: the mailbox, then the Probability Drive | — |
 | 7 | **Towelwise Guide**: fundamentals library first | — |
@@ -76,12 +76,14 @@ Built and tested in real use as a VS Code extension, never released. This code b
 
 A real Towelwise AI app for Windows, with no core patches of our own. See [the spec](.work/specs/phase-3-first-build.md).
 
-- [ ] Build scripts and patches on upstream Code-OSS, starting from VSCodium's
-- [ ] Its own name, icon and data, side by side with VS Code
-- [ ] Open VSX as its store; telemetry off
-- [ ] Phase 2's code built in
-- [ ] Claude Code and Codex install, sign in fresh, and work
-- [ ] One real upstream update done and timed
+- [x] Build scripts and patches on upstream Code-OSS, starting from VSCodium's
+- [x] Its own name, icon and data, side by side with VS Code
+- [x] Open VSX as its store; telemetry off
+- [x] Phase 2's code built in
+- [x] Claude Code and Codex install, sign in fresh, and work
+- [ ] One real upstream update done and timed. Standing upkeep from 2026-11-03: none was available when Phase 3 closed (pinned 1.143.17232 was the newest VSCodium tag), so it is done and logged when VSCodium next releases
+
+**Closed 2026-11-03 (owner):** the owner uses the app daily, and Claude Code and Codex install, sign in and work in it.
 
 **Done when:** you can run the app daily, and an upstream update has been done and measured, so we know whether the upkeep is sustainable.
 
@@ -91,11 +93,14 @@ A real Towelwise AI app for Windows, with no core patches of our own. See [the s
 
 The first core patch, kept small and careful. This is the headline feature: your UI, your way.
 
+**Slice order (owner, 2026-11-03):** sizes first ([spec](.work/specs/phase-4-sizes.md)), then editor-grid layouts, then locked hyperspace. The first-run screen needs no patch and can come at any time. Default keys are close to trivial.
+
 1. **The layout editor.** Turn each part of the window on or off, and set its width and height. On or off is done: the Edit Hyperspace Layout picker shows a mock window where you choose Keep or Hide for each part. Boxes drawn over the live window were tried as a spike on 2026-11-02 and dropped, because the picker was clearer and the boxes looked worse. Setting widths and heights is what still needs the first core patch.
 2. **Save as your hyperspace layout.** Sizes are proportions at first, so they carry across screens.
 3. **Locked hyperspace.** While it's on, the window holds to your layout and no other way. Anything that wants to open shows a notification instead; click it and it opens in a hovering window you can dismiss.
 4. **Default keys** for going in and out of hyperspace, with more to come. Today's defaults are `Alt+Shift+J` and `Alt+Shift+L`.
 5. **Works for anyone:** agents, plain text editing without AI, folder lists, whatever they choose.
+5a. **Editor-grid layouts (owner, 2026-11-03).** Several agents and panels side by side in the editor area, for example three columns: Claude Code, Codex, and a third split into a terminal above the Recall dashboard. The built-in `vscode.setEditorLayout` command sets nested editor groups with proportional sizes, Claude Code opens as an editor tab, terminals can open in the editor area, and hyperspace always keeps the editor area, so no core patch is expected. The slice starts with a short test: whether Codex opens in a chosen group (it declares an editor, `chatgpt.conversationEditor`), and whether both agents' tabs come back after a reload. This overlaps "named layouts" below.
 6. **First-run screen.** "Works with Claude Code and Codex", with install buttons that download from Open VSX on your click, a list of more agents (each checked and tried first), and a real "edit without AI" choice. Agents are never bundled, and sign-in stays in the agent's own panel.
 
 Later: pixel-exact or per-monitor layouts, and named layouts ("three agents", "just Claude"), which wait until daily use shows a need. If built, switching closes the side areas first, then opens the layout's panels.
@@ -130,6 +135,7 @@ Built into the IDE, and can be turned off.
 1. **The mailbox.** Review what was captured; approve into project memory or reject and delete. "Allow always for this project" skips the mailbox for people who don't want it.
 2. **Agent access.** Agents read approved memory through the recall-only connection and their instruction files.
 3. **Export.** A deliberate, one-way copy of memory out to another knowledge bank.
+3a. **The dashboard opens anywhere (requirement, owner 2026-11-03).** Any live Recall dashboard must open as an editor tab, come back after a reload, and also be able to sit as a side view, so it can be placed in an editor-grid layout (Phase 4).
 4. **The Probability Drive.** The live bottom strip: probable memories appear as dim flickering stars. Click one to jump to that item in the mailbox (dropping out of hyperspace, with *Return to hyperspace* to go back), or leave it for after your session. Hover previews, gentle motion, reduced-motion option.
 
 "Contained" describes Towelwise's memory. Chats still go to each agent's vendor under their terms, and agents keep their own memory.
@@ -250,7 +256,7 @@ Sizes are source-code size in the pinned Code-OSS, not the installed app. "Outsi
 
 | Question | Needed by |
 |---|---|
-| ~~Weekly hours, so the prototype can be dated honestly~~ Answered 2026-10-31: about 5 to 10 hours a week | Done |
+| ~~Weekly hours, so the prototype can be dated honestly~~ Answered 2026-10-31: about 5 to 10 hours a week. Updated 2026-11-03: likely more, but it can drop to zero for days at a time, so each slice should leave the app usable on its own | Done |
 | Is the upstream upkeep sustainable at that pace? | Phase 3 |
 | Which agents go on the "more agents" list? (Claude Code and Codex are first; Cline, Gemini Code Assist and Kilo Code are candidates once checked) | Phase 4 |
 | Does today's layout merge into the hyperspace layout, or stay separate? | Phase 4 |
