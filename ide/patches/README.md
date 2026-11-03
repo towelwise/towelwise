@@ -10,7 +10,7 @@ Each patch has a note below: why it exists, what it touches, and how it fared at
 
 **What it does.** Two settings that the built-in extension ships are the whole interface: `towelwise.menus.hidden` (command ids or `prefix.*` patterns to hide) and `towelwise.menus.towelwise` (the entries of a new Towelwise menu). A hidden command is not offered in menus, the Command Palette or default shortcuts, but still runs when called by other code. An entry of the form `menu:MenuId` hides the submenu item that opens that menu (used for the View menu's Appearance and Editor Layout), never the commands inside it; it matches the menu id exactly. Spec: [view-menu.md](../../.work/specs/view-menu.md). The pinned source registers those two submenus only on the View menu, so no other menu loses them.
 
-**What it touches (6 files, one hunk or new file each; +266/-2 lines).**
+**What it touches (6 files, one hunk or new file each; +267/-2 lines).**
 
 - new `platform/commands/common/hiddenCommands.ts`: the shared list, its matcher, and a startup default equal to the setting's default so nothing flashes before the setting is read. It also holds `isMenuHidden`; the command matcher skips `menu:` entries so a command that happens to share a menu id is not hidden.
 - `platform/actions/common/actions.ts`: `MenuRegistry.getMenuItems` returns its result without hidden commands, after the implicit Command Palette items are added, and drops hidden alternate actions; menus rebuild when the list changes. A submenu item whose menu id is listed as `menu:MenuId` is dropped there too (+2 lines, view-menu slice). The startup default also lists the Debug, Testing and Notebook families (prefixes) and `menu:MenubarDebugMenu`, so the top-level Run menu goes too.
