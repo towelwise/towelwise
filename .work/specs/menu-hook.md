@@ -2,6 +2,8 @@
 
 Status: ready-for-agent (defaults and entries contract approved by the owner, 2026-11-02)
 
+> **Revised 2026-11-03:** the owner withdrew hiding by default. `towelwise.menus.hidden` now ships empty and the patch's startup default is empty, so every built-in menu shows. The hook and the `menu:` form are unchanged and a person can still list entries to hide. The default lists and the "hidden by default" criteria below describe the earlier plan and no longer hold.
+
 ## Goal
 
 The first committed core patch, as planned in [decision 0005](../../docs/decisions/0005-patch-core-only-when-the-extension-cannot.md): one small configurable hook, so hiding built-in features and adding Towelwise's own menu are data in a setting, not a new patch each time. It delivers the terminal decision in the strip-down section of [ROADMAP.md](../../ROADMAP.md): keep the integrated terminal, hide its user entry points, and open shells outside the IDE from [the external shells](external-shells.md). It also hides Tasks, which shares the Terminal menu and was decided hidden. Hiding Debug, Testing and Notebooks reuses the same hook in a later slice. Windows first.

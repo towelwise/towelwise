@@ -202,11 +202,11 @@ Sizes are source-code size in the pinned Code-OSS, not the installed app. "Outsi
 | Area | What it is | Source size | Outside importers | Do the agents need it? | Cheapest first step |
 |---|---|---|---|---|---|
 | Terminal | The integrated terminal and its panel | 2.5 MB, 85 files | about 24 to 43 | Not for the chat panels (see above); Codex's helper not confirmed | Hide the entry points; try it for a week |
-| Tasks | Run Task, `tasks.json`, build tasks | 0.7 MB, 21 files | about 8 | Not examined | **Decided: hide** (owner, 2026-11-02: agents run these for newcomers) |
-| Debug | The debugger and its views | 2.2 MB, 77 files | about 18 | Not examined | **Decided: hide** (same reason) |
-| Testing | The Testing view and test runners | 1.1 MB, 57 files | about 9 | Not examined | **Decided: hide** (same reason) |
+| Tasks | Run Task, `tasks.json`, build tasks | 0.7 MB, 21 files | about 8 | Not examined | ~~Decided: hide~~ **Shown by default** (revised 2026-11-03); a person may hide it |
+| Debug | The debugger and its views | 2.2 MB, 77 files | about 18 | Not examined | ~~Decided: hide~~ **Shown by default** (revised 2026-11-03) |
+| Testing | The Testing view and test runners | 1.1 MB, 57 files | about 9 | Not examined | ~~Decided: hide~~ **Shown by default** (revised 2026-11-03) |
 | Built-in chat | VS Code's own AI chat views and services | 19.5 MB, 904 files | about 99 | Not examined; separate from the Claude and Codex panels, which are their own extensions | Find which parts are still active in the VSCodium build; hide, do not delete |
-| Notebooks | Jupyter-style notebooks and their editors | 4.6 MB, 203 files | about 47 | Not examined | **Decided: hide**; keep the code (owner, 2026-11-02) |
+| Notebooks | Jupyter-style notebooks and their editors | 4.6 MB, 203 files | about 47 | Not examined | ~~Decided: hide~~ **Shown by default** (revised 2026-11-03); keep the code |
 | Source Control | The Git view, diffs, commits | 0.7 MB, 26 files | about 12 | Not examined | **Decided: keep as is.** The owner says it matters even to newcomers (2026-11-02) |
 | Remote | Remote and container workspaces | 0.3 MB, 15 files | about 30 | Not examined | Hide the entry points |
 | MCP | Model Context Protocol servers view | 1.6 MB, 71 files | about 11 | Likely relevant to agents (not checked) | **Decided: keep.** The owner expects to rely on it later (2026-11-02) |
@@ -219,7 +219,7 @@ Sizes are source-code size in the pinned Code-OSS, not the installed app. "Outsi
 - For each area marked "not examined", check whether Claude Code or Codex uses it, by reading their manifests and, where unclear, running them with it off.
 - Decide the newcomer question for the terminal and Source Control first, since they are the two with the clearest value to a person new to agent work.
 
-**Decided so far (owner, 2026-11-02):** hide Tasks, Debug, Testing and Notebooks; keep MCP; keep Source Control as is. Hiding means the way in is hidden and the code stays. How hiding is done has not been designed.
+**Decided so far (owner, 2026-11-02):** keep MCP; keep Source Control as is. **Revised 2026-11-03:** the earlier decision to hide Tasks, Debug, Testing and Notebooks is withdrawn. Towelwise is an IDE for people who do not use agents as well, so every built-in menu shows by default (the Towelwise menu is added). The menu hook stays: `towelwise.menus.hidden` ships empty, and a person can list what they want hidden (hiding only removes the way in; the code stays). A picker for choosing what to hide was discussed and set aside as not worth the effort now; time goes to what Towelwise adds.
 
 **Terminal, decided (owner, 2026-11-02):** keep the integrated terminal and hide its user entry points (menu items, panel tab, shortcut, palette commands). In their place, entries that open shells in a normal window outside the IDE, each starting in the project folder: PowerShell and PowerShell (Admin), Command Prompt and Command Prompt (Admin). Further entries approved: Git Bash, and PowerShell 7 and WSL only when installed (WSL needs a Linux distro installed; the owner has WSL without one). Windows Terminal is a window that can host these shells in tabs, not a shell itself; whether to offer it as an entry or as the place the entries open is still open. Only installed shells show, and the list would be editable. Admin entries use Windows' own permission prompt; no elevated shell lives inside the IDE. The entries can be Command Palette commands from the built-in extension with no patch; placing them in the top Terminal menu and hiding the integrated terminal's own entries needs a core patch. How patches are decided is in [0005](docs/decisions/0005-patch-core-only-when-the-extension-cannot.md) (approved).
 
@@ -242,7 +242,7 @@ Sizes are source-code size in the pinned Code-OSS, not the installed app. "Outsi
 - Claude Code offers its own ways in: open in a new tab (`claude-vscode.editor.open`), the primary editor (`claude-vscode.primaryEditor.open`), the side bar (`claude-vscode.sidebar.open`), or a new window.
 - A Towelwise Agents entry in the built-in extension could offer "Open Claude Code" and "Open Codex", each following one setting for where it opens. No core patch. Not designed: the setting's name and default, how installed agents are found, and whether the VS Code Chat view is hidden at the same time.
 
-**Still open for the owner:** how the hiding is done (the menu hook patch, see 0005, and which areas go first); whether Windows Terminal is an entry or the place the shell entries open; the default for where agents open (editor panels or the side bar), and whether the VS Code Chat view is hidden; whether hiding is enough or some areas should eventually be deleted; and whether built-in extensions get their own pass. Settled and not to be reopened: keep the integrated terminal with its entry points hidden, external shells instead, Tasks, Debug, Testing and Notebooks hidden, MCP and Source Control kept.
+**Still open for the owner:** how the hiding is done (the menu hook patch, see 0005, and which areas go first); whether Windows Terminal is an entry or the place the shell entries open; the default for where agents open (editor panels or the side bar), and whether the VS Code Chat view is hidden; whether hiding is enough or some areas should eventually be deleted; and whether built-in extensions get their own pass. Settled and not to be reopened: external shell entries in the Towelwise menu, MCP and Source Control kept. Superseded 2026-11-03: the integrated terminal, Tasks, Debug, Testing and Notebooks are no longer hidden by default.
 
 ---
 

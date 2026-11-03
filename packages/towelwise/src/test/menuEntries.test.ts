@@ -6,37 +6,7 @@ import { SHELL_KEYS } from '../shells';
 const manifest = () => vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON;
 const properties = () => Object.assign({}, ...manifest().contributes.configuration.map((c: { properties: object }) => c.properties));
 
-const HIDDEN_DEFAULT = [
-  'workbench.action.terminal.*',
-  'workbench.action.createTerminalEditor',
-  'workbench.action.createTerminalEditorSide',
-  'workbench.action.createTerminalEditorSameGroup',
-  'workbench.action.quickOpenTerm',
-  'terminal.integrated.*',
-  'workbench.action.tasks.*',
-  'menu:MenubarAppearanceMenu',
-  'menu:MenubarLayoutMenu',
-  'workbench.view.debug',
-  'workbench.debug.action.toggleRepl',
-  'menu:MenubarDebugMenu',
-  'workbench.action.debug.*',
-  'workbench.debug.*',
-  'debug.*',
-  'editor.debug.action.*',
-  'testing.*',
-  'workbench.action.testing.*',
-  'workbench.view.extension.test',
-  'workbench.view.testing.*',
-  'notebook.*',
-  'workbench.notebook.*',
-  'interactive.*',
-  'workbench.action.interactive.*',
-  'ipynb.*',
-  'workbench.panel.repl.view.*',
-  'extension.node-debug.*',
-  'extension.pwa-node-debug.*',
-  'extension.js-debug.*',
-];
+const HIDDEN_DEFAULT: string[] = [];
 
 suite('menu settings', () => {
   test('the hide list is a shipped, application-scoped list of strings with the agreed default', () => {

@@ -2,6 +2,8 @@
 
 Status: ready-for-agent (scope agreed with the owner, 2026-11-02). One naming default below is proposed, not approved.
 
+> **Revised 2026-11-03:** the owner withdrew hiding by default. `towelwise.menus.hidden` now ships empty and the patch's startup default is empty, so every built-in menu shows. The hook and the `menu:` form are unchanged and a person can still list entries to hide. The default lists and the "hidden by default" criteria below describe the earlier plan and no longer hold.
+
 ## Goal
 
 The second use of the menu hook from [menu-hook.md](menu-hook.md): trim the View menu so a newcomer sees a short list, and leave how the window looks and is laid out to the Towelwise menu (Choose Layout, Restore Layout, Edit Hyperspace Layout), which already sits beside View. Roadmap slice: the strip-down section of [ROADMAP.md](../../ROADMAP.md), after the terminal and Tasks. Windows first.
