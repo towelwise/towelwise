@@ -9,3 +9,9 @@ VS Code gives extensions no way to read whether a side bar or the bottom panel i
 **Ruled out:** reopening every area on restore (it would open ones that were closed), toggling the editor area, and guessing full-screen state.
 
 **Revisit** if VS Code adds an API to read area visibility or window state.
+
+## Amendment (owner, 2026-11-03): sizes are read through a core bridge
+
+Towelwise AI now patches core ([0004](0004-towelwise-ai-is-an-ide-built-from-code-oss-patches.md), [0005](0005-patch-core-only-when-the-extension-cannot.md)), so the "never reads" premise no longer holds for sizes. A small bridge patch lets the built-in extension read whether the primary side bar, secondary side bar and panel are visible, their sizes, the panel's position and the window's size, and set those three sizes ([the sizes spec](../../.work/specs/phase-4-sizes.md)). Hyperspace uses it to apply the person's sizes on a jump and to put the previous sizes back on restore, only for parts still visible and only in the window that jumped.
+
+What stays: areas hyperspace closes still stay closed on restore, the editor area is still always kept, and full screen follows the rule above. Reopening areas on restore, now that visibility can be read, would be a new decision, not part of this amendment.
