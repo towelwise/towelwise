@@ -34,3 +34,32 @@ Status: approved by the owner (2026-11-02). Refines [0004](0004-towelwise-ai-is-
 - Patches are tested by the build and by the owner in the built app. Logic they rely on stays in the extension, where automated tests reach it.
 
 **Revisit** if the first real upstream update shows the patch upkeep is too high, if the menu hook cannot hide entries cleanly, or if so many things need patches that the extension is no longer where most of the code lives.
+
+## Amendment (owner, 2026-11-03): the layout is core product, and gets the patches it needs
+
+The owner defines the first release as "your layout, your way, plus hyperspace". After the editor-grid slice was built, they found that applying proportions to whatever is already open does not produce the layout they want. The layout has to be something the user designs and Towelwise places: which agent lives where (left side bar, right side bar, bottom panel, or a cell in the editor grid), the grid itself, and a saved layout that Restore Layout can always bring back. That is the product's main difference from other editors, so it is worth more core patching than rule 2's "smallest patch" allows.
+
+**What changes for layout work**
+
+- Layout features may patch core wherever the extension cannot do the job reliably. They are not limited to new files plus a one-line registration. A patch that grows past a few small files no longer has to stop and ask (the consequence above). It still needs a note on why the extension cannot do the job.
+- Rules 1, 4 and 5 still apply. The extension goes first where the public API is enough, every patch keeps its upkeep note, and features are hidden before they are deleted. Logic stays in the extension where it can be tested, and core patches stay bridges and hooks wherever that works.
+- Rule 3 extends to layout. Bridges belong on the existing layout bridge patch (0003), not in new one-off patches.
+
+**What the agents' code showed (2026-11-03).** Claude Code and Codex only declare where their side views start (both ask for the right side bar). After that, VS Code core decides where a view lives and remembers moves (`IViewDescriptorService.moveViewToLocation`, the same call that dragging a view uses). The only built-in command for this, **View: Move View**, is an interactive picker, so Towelwise needs a bridge to move a view without the picker. Claude Code chooses its own editor column when it opens a tab and ignores the focused group. Towelwise therefore places it after it opens, or, if that loses the conversation, a patch steers where it opens.
+
+**Expected patches, in order of need, each settled by a probe first**
+
+1. Move a view container to a side bar or the panel (added to the layout bridge). Small.
+2. Steer an agent's editor tab into its assigned cell. Needed only if moving the tab after it opens loses the conversation.
+3. A bottom panel that sits under a single editor column. Not planned: a terminal tab in a grid cell gives the same result without reworking the workbench layout. It is reconsidered only if that falls short in use.
+
+**Probe results (owner, 2026-11-03, stock VS Code with Claude Code 2.1.317 and Codex 26.1021)**
+
+- **Side views:** a view moved with View: Move View stayed where it was put after a reload. The agent's own open command (Open Codex Sidebar, Claude Code: Open in Side Bar) opened it in the new place. Patch 1 is confirmed as needed and enough. It only makes that move without the picker.
+- **Agent tabs:** Claude Code opens its tab in a new column of its own choosing. Towelwise can move the tab into its cell and the conversation survives. Codex opens its tab (a custom editor, `chatgpt.conversationEditor`) in the focused column, so focusing the cell first places it with no move. Patch 2 is not needed. Not yet confirmed: whether a Codex conversation survives a move, because its chat did not load during the probe.
+- **Terminals:** `createTerminal` with an editor location opened each terminal straight into the cell it asked for.
+- **Empty cells:** VS Code closes a column once its last tab leaves it (`workbench.editor.closeEmptyGroups`), and the grid shifts. Placement must never leave a planned cell empty, or must handle that setting.
+
+**Unchanged:** [0003](0003-hyperspace-never-reads-or-reopens-layout-state.md) still governs hyperspace. Hyperspace never reopens areas it closed. The saved layout and Restore Layout are a separate feature that may open and place things, because that is what the user asks for when they press it.
+
+**Revisit** after the first real upstream update, with the layout patches' upkeep measured. If one release's rebase of the layout patches takes more than a day, look again at what can move back into the extension.
