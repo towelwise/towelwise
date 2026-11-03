@@ -18,6 +18,19 @@ const HIDDEN_DEFAULT = [
   'menu:MenubarLayoutMenu',
   'workbench.view.debug',
   'workbench.debug.action.toggleRepl',
+  'menu:MenubarDebugMenu',
+  'workbench.action.debug.*',
+  'workbench.debug.*',
+  'debug.*',
+  'editor.debug.action.*',
+  'testing.*',
+  'workbench.action.testing.*',
+  'workbench.view.testing',
+  'notebook.*',
+  'workbench.notebook.*',
+  'interactive.*',
+  'workbench.action.interactive.*',
+  'ipynb.*',
 ];
 
 suite('menu settings', () => {

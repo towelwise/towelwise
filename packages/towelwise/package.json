@@ -197,7 +197,20 @@
               "menu:MenubarAppearanceMenu",
               "menu:MenubarLayoutMenu",
               "workbench.view.debug",
-              "workbench.debug.action.toggleRepl"
+              "workbench.debug.action.toggleRepl",
+              "menu:MenubarDebugMenu",
+              "workbench.action.debug.*",
+              "workbench.debug.*",
+              "debug.*",
+              "editor.debug.action.*",
+              "testing.*",
+              "workbench.action.testing.*",
+              "workbench.view.testing",
+              "notebook.*",
+              "workbench.notebook.*",
+              "interactive.*",
+              "workbench.action.interactive.*",
+              "ipynb.*"
             ],
             "scope": "application",
             "markdownDescription": "Commands to hide from the menus, the Command Palette and keyboard shortcuts. Each entry is a command id, or a prefix ending in `.*`. An entry of the form `menu:MenuId` hides the submenu item that opens that menu, such as `menu:MenubarLayoutMenu`, but not the commands inside it. Hidden commands still run when other code calls them. Empty the list to bring everything back. Needs Towelwise AI."
