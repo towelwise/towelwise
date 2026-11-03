@@ -187,6 +187,30 @@
             "description": "Also apply your layout when a window opens. Skipped while hyperspace is on.",
             "scope": "application"
           },
+          "towelwise.layout.agents": {
+            "type": "object",
+            "default": {},
+            "properties": {
+              "claudeCode": { "enum": ["left", "right", "panel", "editor"] },
+              "codex": { "enum": ["left", "right", "panel", "editor"] }
+            },
+            "additionalProperties": false,
+            "scope": "application",
+            "markdownDescription": "Where each agent lives: `left` or `right` side bar, the bottom `panel`, or a cell in the `editor` area. When this is set, **Towelwise: Restore Layout** moves each agent there and ignores `towelwise.layout.containers` and `towelwise.layout.commands`."
+          },
+          "towelwise.layout.sizes": {
+            "type": "object",
+            "default": {},
+            "properties": {
+              "sidebar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "auxiliarybar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "panel": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "panelOrientation": { "enum": ["across", "down"] }
+            },
+            "additionalProperties": false,
+            "scope": "application",
+            "markdownDescription": "Side bar and panel sizes as proportions of the window (0 to 1), applied by **Towelwise: Restore Layout** after the agents are placed. `panel` needs a `panelOrientation`: `down` if the panel is at the bottom or top, `across` if at the left or right."
+          },
           "towelwise.layout.commands": {
             "type": "array",
             "items": {

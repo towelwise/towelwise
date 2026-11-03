@@ -2,6 +2,7 @@ import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { isActive, restore, setLog, toggle } from './hyperspace';
 import { applyOnStartup, chooseLayout, liveVsCode, restoreLayout } from './layout';
+import { applyLayout, liveHost, readLayout } from './myLayout';
 import { logMenuProblems } from './menuEntries';
 import { openPicker } from './pickerPanel';
 import { available, detectMachine, launch, SHELL_KEYS, ShellKey, startDir } from './shells';
@@ -72,6 +73,16 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('towelwise.layout.choose', () => chooseLayout().catch(showError)),
     vscode.commands.registerCommand('towelwise.layout.restore', async () => {
       try {
+        const mine = readLayout(log);
+        if (mine) {
+          const outcome = await applyLayout(liveHost(storageDir, log), mine);
+          if (outcome.refused) {
+            void vscode.window.showInformationMessage('Towelwise: leave hyperspace first, then restore your layout.');
+          } else if (outcome.problems.length > 0) {
+            void vscode.window.showInformationMessage(`Towelwise: your layout is applied, except: ${outcome.problems.join('; ')}.`);
+          }
+          return;
+        }
         const { ran, skipped } = await restoreLayout(await liveVsCode(log));
         if (ran.length + skipped.length === 0) {
           void vscode.window.showInformationMessage('Towelwise: no layout chosen yet. Run Towelwise: Choose Layout.');

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { isActive } from './hyperspace';
+import { readLayout } from './myLayout';
 
 // VS Code cannot read or move the layout, so a layout is declared: the containers to show, in order.
 // Showing a container opens it where it already lives; nothing is moved or closed.
@@ -113,6 +114,8 @@ export async function restoreLayout(vs: LayoutEnv, withCommands = true): Promise
 export async function applyOnStartup(storageDir: string, env: () => Promise<LayoutEnv>): Promise<boolean> {
   // The environment is built only when needed: it reads every command and extension manifest, on every window open.
   if (!layoutConfig().get('applyOnStartup', false) || isActive(storageDir)) return false;
+  // A layout made with agent places is applied at startup by a later slice; the earlier container list is ignored then.
+  if (readLayout(() => undefined)) return false;
   const vs = await env();
   // Another window may have started hyperspace while the environment loaded.
   if (isActive(storageDir)) return false;

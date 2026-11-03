@@ -40,14 +40,14 @@ interface Grid {
 }
 
 // Reads and sets part sizes in the window it belongs to. Absent without the core bridge.
-interface Bridge {
+export interface Bridge {
   state(): PromiseLike<LayoutState | undefined>;
   setSize(part: PartName, pixels: number): PromiseLike<unknown>;
 }
 
 // The window running a transition: its id (new on every start) and how it runs VS Code commands.
 // A parameter only so tests can stand in for other windows and observe or fail commands.
-interface Host {
+export interface Host {
   windowId: string;
   run(command: string): PromiseLike<unknown>;
   bridge?: Bridge;
@@ -193,37 +193,47 @@ async function jump(storageDir: string, host: Host): Promise<string[]> {
   return chrome.filter(({ key, hidden }) => after.get(key) !== hidden).map(({ key }) => key);
 }
 
-async function readState(host: Host): Promise<LayoutState | undefined> {
+// A failure is logged and also added to problems, for a caller that reports what could not be applied.
+async function readState(host: Host, problems: string[] = []): Promise<LayoutState | undefined> {
   try {
     const state = await host.bridge?.state();
-    if (!state) host.log?.('sizes: no layout bridge, so sizes are left alone');
+    if (!state) {
+      host.log?.('sizes: no layout bridge, so sizes are left alone');
+      problems.push('sizes: the layout could not be read, so sizes were left alone');
+    }
     return state;
   } catch (e) {
     host.log?.(`sizes: could not read the layout (${errorText(e)}), so sizes are left alone`);
+    problems.push(`sizes: the layout could not be read (${errorText(e)}), so sizes were left alone`);
     return undefined;
   }
 }
 
 // Each size is tried on its own; a grid that adjusts a size is logged, a failure is logged, and neither stops anything.
-async function setSizes(host: Host, set: { part: PartName; pixels: number }[]): Promise<void> {
+async function setSizes(host: Host, set: { part: PartName; pixels: number }[], problems: string[] = []): Promise<void> {
   for (const { part, pixels } of set) {
     try {
       const actual = await host.bridge?.setSize(part, pixels);
       host.log?.(actual === pixels ? `sizes: ${part} set to ${pixels}px` : `sizes: ${part} asked for ${pixels}px, got ${String(actual)}px`);
     } catch (e) {
       host.log?.(`sizes: could not set ${part} (${errorText(e)})`);
+      problems.push(`sizes: could not set the ${part} size (${errorText(e)})`);
     }
   }
 }
 
-async function applySizes(host: Host, wanted: ReturnType<typeof parseSizes>, kept: ReadonlySet<PartName>): Promise<void> {
-  const state = await readState(host);
-  if (!state) return;
+/** Applies the sizes; best effort. Returns what could not be applied, for a caller that reports it (a jump ignores it). */
+export async function applySizes(host: Host, wanted: ReturnType<typeof parseSizes>, kept: ReadonlySet<PartName>): Promise<string[]> {
+  const problems: string[] = [];
+  const state = await readState(host, problems);
+  if (!state) return problems;
   const { set, skipped } = planSizes(wanted, state, kept);
   if (skipped.length > 0) {
     host.tell?.('Towelwise: the bottom panel is on a different side than when you saved its size, so its size was left alone.');
+    problems.push('sizes: the bottom panel is on a different side than when its size was saved, so its size was left alone');
   }
-  await setSizes(host, set);
+  await setSizes(host, set, problems);
+  return problems;
 }
 
 async function readGrid(host: Host): Promise<Layout | undefined> {

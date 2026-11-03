@@ -27,7 +27,13 @@ suite('towelwise.towelwise', () => {
     ).filter(([key]) => key.startsWith('towelwise.layout.'));
     assert.deepStrictEqual(
       layout.map(([key]) => key).sort(),
-      ['towelwise.layout.applyOnStartup', 'towelwise.layout.commands', 'towelwise.layout.containers'],
+      [
+        'towelwise.layout.agents',
+        'towelwise.layout.applyOnStartup',
+        'towelwise.layout.commands',
+        'towelwise.layout.containers',
+        'towelwise.layout.sizes',
+      ],
     );
     for (const [key, schema] of layout) assert.strictEqual(schema.scope, 'application', key);
   });
