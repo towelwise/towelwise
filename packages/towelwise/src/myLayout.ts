@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AGENTS, AGENT_IDS, AgentId, AgentPlaces, Place, parseAgents } from './agents';
+import { AGENTS, AGENT_IDS, AgentId, AgentPlaces, Place, coreContainerId, parseAgents } from './agents';
 import { Bridge, applySizes, isActive } from './hyperspace';
 import { PARTS, Sizes, parseLayoutState, parseSizes } from './sizes';
 
@@ -47,7 +47,8 @@ export function locationFor(place: Place, sideBarOnRight: boolean): Location | u
 
 // The first of an agent's containers that the window has, and where it lives.
 async function findContainer(host: MyLayoutHost, id: AgentId): Promise<{ id: string; at: unknown } | undefined> {
-  for (const container of AGENTS[id].containers) {
+  for (const declared of AGENTS[id].containers) {
+    const container = coreContainerId(declared);
     const at = await host.bridge.locate(container);
     if (at !== undefined) return { id: container, at };
   }

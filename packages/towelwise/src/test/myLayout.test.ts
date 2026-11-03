@@ -1,5 +1,5 @@
 import * as assert from 'node:assert';
-import { parseAgents } from '../agents';
+import { coreContainerId, parseAgents } from '../agents';
 import { applyLayout, locationFor, MyLayoutHost } from '../myLayout';
 import { LayoutState } from '../sizes';
 
@@ -98,14 +98,27 @@ suite('agents and my layout', () => {
   });
 
   suite('applyLayout', () => {
-    const CODEX = 'codexSecondaryViewContainer';
-    const CLAUDE = 'claude-sidebar-secondary';
+    // Core names an extension's container by prefixing the id its manifest declares.
+    const CODEX = coreContainerId('codexSecondaryViewContainer');
+    const CLAUDE = coreContainerId('claude-sidebar-secondary');
 
     test('moves a view that is somewhere else, then opens it with the agent\'s own command', async () => {
       const w = windowWith({ [CODEX]: 'auxiliarybar' });
       const out = await applyLayout(w.host, { agents: { codex: 'left' } });
       assert.deepStrictEqual(w.calls, [`move ${CODEX} sidebar`, 'run chatgpt.openSidebar']);
       assert.deepStrictEqual(out, { placed: ['codex'], problems: [] });
+    });
+
+    test('asks the window about the ids core really uses: the manifest id with a prefix', async () => {
+      assert.strictEqual(coreContainerId('codexSecondaryViewContainer'), 'workbench.view.extension.codexSecondaryViewContainer');
+      const w = windowWith({ 'workbench.view.extension.codexSecondaryViewContainer': 'auxiliarybar' });
+      await applyLayout(w.host, { agents: { codex: 'left' } });
+      assert.deepStrictEqual(w.calls, ['move workbench.view.extension.codexSecondaryViewContainer sidebar', 'run chatgpt.openSidebar']);
+      // A window that only knows the bare manifest id has no such container.
+      const bare = windowWith({ codexSecondaryViewContainer: 'auxiliarybar' });
+      const out = await applyLayout(bare.host, { agents: { codex: 'left' } });
+      assert.deepStrictEqual(bare.calls, []);
+      assert.strictEqual(out.problems.length, 1);
     });
 
     test('a view that is already in place is not moved, but is still opened', async () => {
@@ -127,9 +140,9 @@ suite('agents and my layout', () => {
     });
 
     test('uses whichever of an agent\'s containers the window has', async () => {
-      const w = windowWith({ 'claude-sidebar': 'sidebar' });
+      const w = windowWith({ [coreContainerId('claude-sidebar')]: 'sidebar' });
       await applyLayout(w.host, { agents: { claudeCode: 'right' } });
-      assert.deepStrictEqual(w.calls, ['move claude-sidebar auxiliarybar', 'run claude-vscode.sidebar.open']);
+      assert.deepStrictEqual(w.calls, [`move ${coreContainerId('claude-sidebar')} auxiliarybar`, 'run claude-vscode.sidebar.open']);
     });
 
     test('an agent the window does not have is reported, and nothing is run for it', async () => {

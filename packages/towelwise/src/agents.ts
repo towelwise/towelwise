@@ -8,7 +8,7 @@ export const PLACES: readonly Place[] = ['left', 'right', 'panel', 'editor'];
 
 export interface AgentInfo {
   label: string;
-  // The view containers the agent contributes, most likely first: which exists depends on the VS Code version.
+  // The view containers the agent's manifest declares, most likely first: which exists depends on the VS Code version.
   containers: readonly string[];
   // The agent's own command that shows its side view, wherever that view now lives.
   openSidebar: string;
@@ -26,6 +26,9 @@ export const AGENTS: Record<AgentId, AgentInfo> = {
     openSidebar: 'chatgpt.openSidebar',
   },
 };
+
+/** The id core gives a view container an extension declares: it prefixes the manifest's id (viewsExtensionPoint). */
+export const coreContainerId = (manifestId: string) => `workbench.view.extension.${manifestId}`;
 
 export const AGENT_IDS = Object.keys(AGENTS) as AgentId[];
 
