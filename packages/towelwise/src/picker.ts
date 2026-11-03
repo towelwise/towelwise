@@ -108,6 +108,8 @@ export class Draft {
   private baselineSizes = '{}';
   private available = false;
   private note?: string;
+  // What is open in each area, from the last live read that worked. Display only.
+  private names: Partial<Record<PartName, string>> = {};
 
   constructor(
     private write: Write = writeGlobal,
@@ -126,8 +128,23 @@ export class Draft {
 
   /** Finds out whether this window has the core bridge, so the size controls can say so. */
   async refreshLive(): Promise<void> {
-    this.available = (await this.env.read()) !== undefined;
+    const state = await this.env.read();
+    this.available = state !== undefined;
     this.note = this.available ? undefined : NEEDS_IDE;
+    if (state) this.readNames(state);
+  }
+
+  // A failed read keeps the old names; an area that is closed or unnamed goes back to its plain name.
+  private readNames(state: LayoutState): void {
+    this.names = {};
+    for (const part of PARTS) {
+      const title = state.parts[part].container?.title;
+      if (title) this.names[part] = title;
+    }
+  }
+
+  namesView(): Partial<Record<PartName, string>> {
+    return { ...this.names };
   }
 
   sizesView(): SizesView {
@@ -148,6 +165,7 @@ export class Draft {
       return;
     }
     this.available = true;
+    this.readNames(state);
     const read = toProportions(state);
     const hidden: string[] = [];
     for (const part of PARTS) {

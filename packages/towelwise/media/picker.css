@@ -156,3 +156,8 @@ button.primary {
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, transparent);
 }
+
+.open {
+  font-size: 0.85em;
+  opacity: 0.85;
+}

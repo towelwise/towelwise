@@ -33,6 +33,7 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
       items: draft.items(),
       saved: draft.savedOptions(),
       sizes: draft.sizesView(),
+      names: draft.namesView(),
       hyperspaceOn: isActive(storageDir),
       ...extra,
     });
@@ -72,6 +73,20 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
         }
       } catch (e) {
         void vscode.window.showErrorMessage(e instanceof Error ? e.message : String(e));
+      }
+    },
+    undefined,
+    context.subscriptions,
+  );
+  // What is open in each area may have changed while the page was hidden.
+  panel.onDidChangeViewState(
+    async (e) => {
+      if (!e.webviewPanel.visible) return;
+      try {
+        await draft.refreshLive();
+        await send();
+      } catch {
+        // Names are display only; a failed refresh keeps what the page shows.
       }
     },
     undefined,

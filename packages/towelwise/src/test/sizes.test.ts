@@ -189,4 +189,16 @@ suite('sizes: recording and restoring', () => {
       assert.strictEqual(parseLayoutState(bad), undefined);
     }
   });
+
+  test('parseLayoutState keeps a named container, drops a malformed one, and still works without any', () => {
+    const named = live({ parts: { ...live().parts, sidebar: { visible: true, size: 300, container: { id: 'workbench.view.explorer', title: 'Explorer' } } } });
+    assert.deepStrictEqual(parseLayoutState(named)?.parts.sidebar.container, { id: 'workbench.view.explorer', title: 'Explorer' });
+    for (const bad of [{ id: '', title: 'x' }, { id: 'a' }, { id: 'a', title: 5 }, 'Explorer']) {
+      const broken = live({ parts: { ...live().parts, sidebar: { visible: true, size: 300, container: bad as never } } });
+      const parsed = parseLayoutState(broken);
+      assert.ok(parsed, JSON.stringify(bad));
+      assert.strictEqual(parsed?.parts.sidebar.container, undefined);
+    }
+    assert.ok(parseLayoutState(live()));
+  });
 });

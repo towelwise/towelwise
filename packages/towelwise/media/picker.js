@@ -2,6 +2,9 @@
 const vscodeApi = acquireVsCodeApi();
 const app = document.getElementById('app');
 
+// Which resizable area an item is, to look up what is open in it.
+const PART = { hidePrimarySideBar: 'sidebar', hideSecondarySideBar: 'auxiliarybar', hideBottomPanel: 'panel' };
+
 // Where each item sits in the mock window.
 const AREA = {
   hideMenuBar: 'menu',
@@ -41,8 +44,10 @@ function render(state) {
     button.dataset.area = AREA[item.option];
     button.dataset.key = item.option;
     button.setAttribute('aria-pressed', String(hide));
-    button.setAttribute('aria-label', `${item.label}: ${hide ? 'hide' : 'keep'}`);
+    const open = state.names && PART[item.option] ? state.names[PART[item.option]] : undefined;
+    button.setAttribute('aria-label', `${item.label}${open ? ', showing ' + open : ''}: ${hide ? 'hide' : 'keep'}`);
     button.append(el('span', 'name', item.label), el('span', 'badge', hide ? 'Hide' : 'Keep'));
+    if (open) button.append(el('span', 'open', open));
     if (item.overridden) button.append(el('span', 'note', 'set by this project'));
     button.addEventListener('click', () => vscodeApi.postMessage({ type: 'choose', option: item.option, choice: hide ? 'keep' : 'hide' }));
     mock.append(button);

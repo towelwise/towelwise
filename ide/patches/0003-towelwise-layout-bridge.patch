@@ -1,9 +1,9 @@
 diff --git a/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts b/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts
 new file mode 100644
-index 0000000..812bf22
+index 0000000..6881d94
 --- /dev/null
 +++ b/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,64 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Towelwise AI: a bridge that lets the built-in Towelwise extension read and set the sizes of the side bars
 + *  and the panel. It holds no feature logic: it reports the layout service's state and sets one size.
@@ -11,6 +11,8 @@ index 0000000..812bf22
 + *--------------------------------------------------------------------------------------------*/
 +
 +import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
++import { IPaneCompositePartService } from '../../../services/panecomposite/browser/panecomposite.js';
++import { IViewDescriptorService, ViewContainerLocation } from '../../../common/views.js';
 +import { IWorkbenchLayoutService, Parts, SINGLE_WINDOW_PARTS, isHorizontal, positionToString } from '../../../services/layout/browser/layoutService.js';
 +
 +const PARTS: { [name: string]: SINGLE_WINDOW_PARTS } = {
@@ -19,15 +21,33 @@ index 0000000..812bf22
 +	panel: Parts.PANEL_PART
 +};
 +
++const LOCATIONS: { [name: string]: ViewContainerLocation } = {
++	sidebar: ViewContainerLocation.Sidebar,
++	auxiliarybar: ViewContainerLocation.AuxiliaryBar,
++	panel: ViewContainerLocation.Panel
++};
++
++// The active container in an area: its id and its view container's title, if both can be found.
++function activeContainer(name: string, visible: boolean, panes: IPaneCompositePartService, views: IViewDescriptorService): { id: string; title: string } | undefined {
++	if (!visible) {
++		return undefined;
++	}
++	const id = panes.getActivePaneComposite(LOCATIONS[name])?.getId();
++	const title = id ? views.getViewContainerById(id)?.title.value : undefined;
++	return id && title ? { id, title } : undefined;
++}
++
 +// The accessor belongs to the window that ran the command, so these always act on that main window.
 +CommandsRegistry.registerCommand('_towelwise.layout.state', accessor => {
 +	const layout = accessor.get(IWorkbenchLayoutService);
-+	const parts: { [name: string]: { visible: boolean; size: number } } = {};
++	const panes = accessor.get(IPaneCompositePartService);
++	const views = accessor.get(IViewDescriptorService);
++	const parts: { [name: string]: { visible: boolean; size: number; container?: { id: string; title: string } } } = {};
 +	const position = layout.getPanelPosition();
 +	for (const [name, part] of Object.entries(PARTS)) {
 +		const visible = layout.isVisible(part);
 +		const size = layout.getSize(part);
-+		parts[name] = { visible, size: name === 'panel' && isHorizontal(position) ? size.height : size.width };
++		parts[name] = { visible, size: name === 'panel' && isHorizontal(position) ? size.height : size.width, container: activeContainer(name, visible, panes, views) };
 +	}
 +	const { width, height } = layout.mainContainerDimension;
 +	return { window: { width, height }, panelPosition: positionToString(position), parts };

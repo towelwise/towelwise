@@ -11,7 +11,8 @@ export const PARTS: readonly PartName[] = ['sidebar', 'auxiliarybar', 'panel'];
 export interface LayoutState {
   window: { width: number; height: number };
   panelPosition: PanelPosition;
-  parts: Record<PartName, { visible: boolean; size: number }>;
+  // container is the active container in that area, when the bridge can name it.
+  parts: Record<PartName, { visible: boolean; size: number; container?: { id: string; title: string } }>;
 }
 
 /** The towelwise.hyperspace.sizes setting: proportions from 0 to 1, any may be absent. */
@@ -121,6 +122,11 @@ export function parseLayoutState(raw: unknown): LayoutState | undefined {
   for (const part of PARTS) {
     const p = s.parts[part];
     if (!p || typeof p.visible !== 'boolean' || !isNumber(p.size)) return undefined;
+    // A container that does not fit is dropped; the rest of the state is still good.
+    const c = p.container as { id?: unknown; title?: unknown } | undefined;
+    if (c !== undefined && !(typeof c?.id === 'string' && c.id !== '' && typeof c.title === 'string' && c.title !== '')) {
+      delete p.container;
+    }
   }
   return s as LayoutState;
 }

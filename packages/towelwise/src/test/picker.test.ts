@@ -515,4 +515,43 @@ suite('picker', () => {
     assert.deepStrictEqual((await save).written, ['sizes']);
     assert.deepStrictEqual(writes, [{ panel: 0.3, panelOrientation: 'down' }]);
   });
+
+  const named = (title: string | undefined, panelTitle?: string): LayoutState =>
+    live({
+      parts: {
+        sidebar: { visible: true, size: 300, container: title ? { id: 'x', title } : undefined },
+        auxiliarybar: { visible: false, size: 0 },
+        panel: { visible: true, size: 250, container: panelTitle ? { id: 'p', title: panelTitle } : undefined },
+      },
+    });
+
+  test('area names follow what is open, and a closed or unnamed area shows its plain name', async () => {
+    let state: LayoutState | undefined = named('Explorer', 'Terminal');
+    const env = { read: async () => state, write: async () => undefined };
+    const draft = new Draft(undefined, env as never);
+    assert.deepStrictEqual(draft.namesView(), {});
+    await draft.refreshLive();
+    assert.deepStrictEqual(draft.namesView(), { sidebar: 'Explorer', panel: 'Terminal' });
+    state = named('Search');
+    await draft.refreshLive();
+    assert.deepStrictEqual(draft.namesView(), { sidebar: 'Search' });
+    state = named('Source Control', 'Problems');
+    await draft.useCurrentSizes();
+    assert.deepStrictEqual(draft.namesView(), { sidebar: 'Source Control', panel: 'Problems' });
+  });
+
+  test('a failed read keeps the previous names, and names never change what Save writes', async () => {
+    let state: LayoutState | undefined = named('Explorer');
+    const { write, writes } = spy();
+    const sizeWrites: unknown[] = [];
+    const env = { read: async () => state, write: async (v: unknown) => void sizeWrites.push(v) };
+    const draft = new Draft(write, env as never);
+    await draft.refreshLive();
+    state = undefined;
+    await draft.refreshLive();
+    assert.deepStrictEqual(draft.namesView(), { sidebar: 'Explorer' });
+    assert.deepStrictEqual(await draft.save(), { written: [] });
+    assert.deepStrictEqual(writes, []);
+    assert.deepStrictEqual(sizeWrites, []);
+  });
 });
