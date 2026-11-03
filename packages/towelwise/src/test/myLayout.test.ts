@@ -67,7 +67,7 @@ function windowWith(
 suite('agents and my layout', () => {
   suite('parseAgents', () => {
     test('accepts a place for each known agent', () => {
-      assert.deepStrictEqual(parseAgents({ claudeCode: 'editor', codex: 'right' }, noLog), { claudeCode: 'editor', codex: 'right' });
+      assert.deepStrictEqual(parseAgents({ claudeCode: 'column', codex: 'right' }, noLog), { claudeCode: 'column', codex: 'right' });
       assert.deepStrictEqual(parseAgents({ codex: 'panel' }, noLog), { codex: 'panel' });
     });
 
@@ -79,10 +79,10 @@ suite('agents and my layout', () => {
 
     test('a value that does not fit is ignored as a whole and logged', () => {
       const logs: string[] = [];
-      for (const bad of [5, 'x', [], { codex: 'middle' }, { cline: 'left' }, { codex: 'left', claudeCode: 3 }]) {
+      for (const bad of [5, 'x', [], { codex: 'middle' }, { codex: 'editor' }, { cline: 'left' }, { codex: 'left', claudeCode: 3 }]) {
         assert.strictEqual(parseAgents(bad, (l) => logs.push(l)), undefined, JSON.stringify(bad));
       }
-      assert.strictEqual(logs.length, 6);
+      assert.strictEqual(logs.length, 7);
     });
   });
 
@@ -93,7 +93,7 @@ suite('agents and my layout', () => {
       assert.strictEqual(locationFor('left', true), 'auxiliarybar');
       assert.strictEqual(locationFor('right', true), 'sidebar');
       assert.strictEqual(locationFor('panel', true), 'panel');
-      assert.strictEqual(locationFor('editor', false), undefined);
+      assert.strictEqual(locationFor('column', false), undefined);
     });
   });
 
@@ -172,9 +172,9 @@ suite('agents and my layout', () => {
       assert.strictEqual(out.problems.length, 1);
     });
 
-    test('an agent placed in the editor is left for the grid slice and reported', async () => {
+    test('an agent placed in a column is left for the grid slice and reported', async () => {
       const w = windowWith({ [CODEX]: 'auxiliarybar' });
-      const out = await applyLayout(w.host, { agents: { codex: 'editor' } });
+      const out = await applyLayout(w.host, { agents: { codex: 'column' } });
       assert.deepStrictEqual(w.calls, []);
       assert.deepStrictEqual(out.placed, []);
       assert.strictEqual(out.problems.length, 1);

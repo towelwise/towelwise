@@ -41,7 +41,7 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** Where "left", "right" or "panel" is, given which side the primary side bar is on. The editor area is not a location. */
 export function locationFor(place: Place, sideBarOnRight: boolean): Location | undefined {
   if (place === 'panel') return 'panel';
-  if (place === 'editor') return undefined;
+  if (place === 'column') return undefined;
   return (place === 'left') !== sideBarOnRight ? 'sidebar' : 'auxiliarybar';
 }
 
@@ -58,7 +58,7 @@ async function findContainer(host: MyLayoutHost, id: AgentId): Promise<{ id: str
 async function placeAgent(host: MyLayoutHost, id: AgentId, place: Place): Promise<string | undefined> {
   const { label, openSidebar } = AGENTS[id];
   const location = locationFor(place, host.sideBarOnRight);
-  if (!location) return `${label}: placing it in the editor area comes with the editor grid, so it was left alone`;
+  if (!location) return `${label}: placing it in a column comes with the editor grid, so it was left alone`;
   let problem: string | undefined;
   try {
     const found = await findContainer(host, id);

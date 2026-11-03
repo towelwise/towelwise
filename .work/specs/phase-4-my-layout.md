@@ -6,7 +6,7 @@ Status: ready-for-agent (scope and the three open points approved by the owner, 
 
 The person designs their window once, Towelwise puts everything where they said, and keeps it there. Three parts:
 
-1. **Choose Layout.** A guided setup: pick which agents to use and where each lives (left side bar, right side bar, bottom panel, or a cell in the editor area); build the editor grid (columns and rows) and say what each cell holds.
+1. **Choose Layout.** A guided setup: pick which agents to use and where each lives (left side bar, right side bar, bottom panel, or a column of the editor grid); build the editor grid (columns and rows) and say what each cell holds.
 2. **Restore Layout.** A command that re-applies the saved layout at any time. The saved layout is the source of truth: dragging things around never changes it unless the person says so.
 3. **Keeping it.** The saved layout applies when a window opens. If the live window drifts from it (the person resized or moved things), Towelwise offers to save the new arrangement or put the saved one back.
 
@@ -25,8 +25,8 @@ This is separate from the hyperspace layout (which things to keep or hide while 
 **Choose Layout** (command `Towelwise: Choose Layout`, also in the Towelwise menu) opens one picker page, like the hyperspace picker, in three steps:
 
 1. **Choose agents.** A list with a check box for each of Claude Code and Codex (more agents later, see Out of scope). An agent not checked is left alone.
-2. **Where does each live?** For each checked agent, four icon choices, using VS Code's own layout icons: left side bar, right side bar, bottom panel, editor area (a cell). The icon for "left" and "right" follows `workbench.sideBar.location`, so "left" always means the left of the screen. Terminal is offered here too, for a cell only: the bottom panel's terminal is VS Code's own and needs no placement.
-3. **Build the editor grid.** Shown only if something is placed in the editor area. It starts as two equal columns. The person can add a column to the left or the right, split any column or row into more rows or columns, remove one, and drag the splitters to set proportions. Each cell takes one item (an agent set to "editor area", or a terminal) or stays empty. Every agent set to "editor area" must be in exactly one cell.
+2. **Where does each live?** For each checked agent, four icon choices, using VS Code's own layout icons: left side bar, right side bar, bottom panel, or a column (a cell of the editor grid). The icon for "left" and "right" follows `workbench.sideBar.location`, so "left" always means the left of the screen. Terminal is offered here too, for a cell only: the bottom panel's terminal is VS Code's own and needs no placement.
+3. **Build the editor grid.** Shown only if something is placed in a column. It starts as two equal columns. The person can add a column to the left or the right, split any column or row into more rows or columns, remove one, and drag the splitters to set proportions. Each cell takes one item (an agent set to "column", or a terminal) or stays empty. Every agent set to "column" must be in exactly one cell.
 
 The same page holds the side bar and panel sizes (typed percentages or **Use current sizes**, reusing the hyperspace sizes section) and shows the result as a mock window.
 
@@ -46,19 +46,20 @@ Phase 2 already ships `Towelwise: Choose Layout` (a quick pick of container ids)
 
 Three settings, each an object with the same scope as the other `towelwise.*` layout settings; a value that does not fit is ignored as a whole and logged:
 
-- `towelwise.layout.agents`: `{ "claudeCode": "editor", "codex": "right" }`, each `left | right | panel | editor`.
+- `towelwise.layout.agents`: `{ "claudeCode": "column", "codex": "right" }`, each `left | right | panel | column`. (`column` was called `editor` in the first draft and in slice A's first build; renamed 2026-11-03 at the owner's request, because it means a column Towelwise controls, not the editor area, which VS Code always has.)
 - `towelwise.layout.grid`: `{ "orientation": 0, "groups": [ { "size": 0.5, "holds": "claudeCode" }, ... ] }`.
 - `towelwise.layout.sizes`: the same shape as `towelwise.hyperspace.sizes` (`sidebar`, `auxiliarybar`, `panel`, `panelOrientation`).
 
 - `grid` and `sizes` use the shapes already built (`SavedGrid`, `Sizes`); a grid leaf carries `holds` (`claudeCode`, `codex`, `terminal`) instead of the old display label, or nothing for an empty cell.
-- Rules checked on parse: an agent placed in the editor appears in exactly one leaf; an agent placed elsewhere appears in none; `terminal` may appear in several leaves.
+- Rules checked on parse: an agent placed in a column appears in exactly one leaf; an agent placed elsewhere appears in none; `terminal` may appear in several leaves.
 
 ## Applying a layout (Restore Layout, and window start)
 
 Best effort throughout: one step failing is logged and reported at the end, and never stops the next. Nothing is ever closed, and no tab other than the chosen items is moved.
 
 1. **Skip conditions.** If hyperspace is active in this window (a snapshot exists), do not apply on startup, and refuse Restore Layout with a message (leave hyperspace first).
-2. **Side views.** For each agent set to left, right or panel: ask the bridge which container holds its view and move it to the wanted place, then open it with the agent's own command (`claude-vscode.sidebar.open`, `chatgpt.openSidebar`). The agent's possible container ids are listed in the extension (Claude Code: `claude-sidebar-secondary`, `claude-sidebar`; Codex: `codexSecondaryViewContainer`, `codexViewContainer`) and the first one the bridge finds is used.
+2. **Side views.** For each agent set to left, right or panel: ask the bridge which container holds its view and move it to the wanted place, then open it with the agent's own command (`claude-vscode.sidebar.open`, `chatgpt.openSidebar`). The agent's possible container ids are listed in the extension (Claude Code: `claude-sidebar-secondary`, `claude-sidebar`; Codex: `codexSecondaryViewContainer`, `codexViewContainer`) and the first one the bridge finds is used. The bridge knows a container by the id core gives it, the manifest id with the prefix `workbench.view.extension.` (found in the first built-app check, 2026-11-03: asking with the bare id found nothing).
+   **Also open as an editor tab.** If the agent is placed in a side bar or the panel and one of its editor tabs is open (Claude Code's webview or Codex's `chatgpt.conversationEditor`, recognised by the agent registry), nothing is closed. The result reports it ("Claude Code is also open as an editor tab") with a **Close it** button; pressing it closes that tab only. Owner decision, 2026-11-03: report and offer, not close automatically, because a tab can hold an unsent draft. Done with the grid work in slice B, which brings the tab recognition into the registry.
 3. **Grid shape.** If a grid is saved: `vscode.setEditorLayout` with the saved shape and proportions. Existing tabs stay in their groups when the shape matches; when it does not, VS Code folds removed groups' tabs into their neighbours and closes none.
 4. **Cell contents**, for each leaf that holds something, in reading order, holding the target group by reference:
    - **Claude Code:** if its tab is already open in another cell, move it to this one. Otherwise open it (`claude-vscode.editor.open`), wait for its tab (up to 15 seconds), then move it to this cell. The column Claude Code adds for itself closes when its tab leaves.
@@ -111,8 +112,9 @@ Each is spec-checked, built test-first, reviewed by Codex and checked by the own
 6. **Start.** A new window applies the saved layout once after its editors have restored, unless `applyOnStartup` is false or hyperspace is active.
 7. **Drift.** Changing a proportion more than the tolerance shows the prompt once; the three buttons do what is described; *Not now* stays quiet until the state changes again.
 8. **Best effort.** Any step failing is logged and reported; the rest still run. A malformed setting is ignored and logged.
-9. **Hyperspace unaffected.** Jump and restore behave as before; no drift prompt or startup apply during hyperspace.
-10. Root `npm run lint`, `npm run build`, `npm test` and `npm run package` exit 0, at the current VS Code and at 1.90.0 (the extension runs there without the bridge: moving and sizes are then skipped with a log line, and the grid steps still work). Slice A is also built into the IDE and checked by the owner.
+9. **No second copy.** An agent placed in a side bar or the panel that is also open as an editor tab is reported with a **Close it** button; nothing closes unless it is pressed.
+10. **Hyperspace unaffected.** Jump and restore behave as before; no drift prompt or startup apply during hyperspace.
+11. Root `npm run lint`, `npm run build`, `npm test` and `npm run package` exit 0, at the current VS Code and at 1.90.0 (the extension runs there without the bridge: moving and sizes are then skipped with a log line, and the grid steps still work). Slice A is also built into the IDE and checked by the owner.
 
 ## Verification
 

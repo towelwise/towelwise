@@ -2,9 +2,10 @@
 // ones the agents' own manifests declare (checked 2026-11-03 against Claude Code 2.1.317 and Codex 26.1021).
 
 export type AgentId = 'claudeCode' | 'codex';
-export type Place = 'left' | 'right' | 'panel' | 'editor';
+// column: a column or cell of the editor grid the person designs (the grid comes with a later slice).
+export type Place = 'left' | 'right' | 'panel' | 'column';
 
-export const PLACES: readonly Place[] = ['left', 'right', 'panel', 'editor'];
+export const PLACES: readonly Place[] = ['left', 'right', 'panel', 'column'];
 
 export interface AgentInfo {
   label: string;

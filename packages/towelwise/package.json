@@ -191,12 +191,12 @@
             "type": "object",
             "default": {},
             "properties": {
-              "claudeCode": { "enum": ["left", "right", "panel", "editor"] },
-              "codex": { "enum": ["left", "right", "panel", "editor"] }
+              "claudeCode": { "enum": ["left", "right", "panel", "column"] },
+              "codex": { "enum": ["left", "right", "panel", "column"] }
             },
             "additionalProperties": false,
             "scope": "application",
-            "markdownDescription": "Where each agent lives: `left` or `right` side bar, the bottom `panel`, or a cell in the `editor` area. When this is set, **Towelwise: Restore Layout** moves each agent there and ignores `towelwise.layout.containers` and `towelwise.layout.commands`."
+            "markdownDescription": "Where each agent lives: `left` or `right` side bar, the bottom `panel`, or a `column` of the editor grid (not available yet). When this is set, **Towelwise: Restore Layout** moves each agent there and ignores `towelwise.layout.containers` and `towelwise.layout.commands`."
           },
           "towelwise.layout.sizes": {
             "type": "object",
