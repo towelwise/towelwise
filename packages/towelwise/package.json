@@ -211,7 +211,11 @@
               "workbench.notebook.*",
               "interactive.*",
               "workbench.action.interactive.*",
-              "ipynb.*"
+              "ipynb.*",
+              "workbench.panel.repl.view.*",
+              "extension.node-debug.*",
+              "extension.pwa-node-debug.*",
+              "extension.js-debug.*"
             ],
             "scope": "application",
             "markdownDescription": "Commands to hide from the menus, the Command Palette and keyboard shortcuts. Each entry is a command id, or a prefix ending in `.*`. An entry of the form `menu:MenuId` hides the submenu item that opens that menu, such as `menu:MenubarLayoutMenu`, but not the commands inside it. Hidden commands still run when other code calls them. Empty the list to bring everything back. Needs Towelwise AI."

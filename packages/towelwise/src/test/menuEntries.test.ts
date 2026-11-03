@@ -32,6 +32,10 @@ const HIDDEN_DEFAULT = [
   'interactive.*',
   'workbench.action.interactive.*',
   'ipynb.*',
+  'workbench.panel.repl.view.*',
+  'extension.node-debug.*',
+  'extension.pwa-node-debug.*',
+  'extension.js-debug.*',
 ];
 
 suite('menu settings', () => {

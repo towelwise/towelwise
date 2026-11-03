@@ -62,7 +62,7 @@ new file mode 100644
 index 00000000..e9171a78
 --- /dev/null
 +++ b/src/vs/platform/commands/common/hiddenCommands.ts
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,79 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Towelwise AI: commands hidden from menus, the Command Palette and default keyboard shortcuts.
 + *
@@ -100,6 +100,10 @@ index 00000000..e9171a78
 +	'interactive.*',
 +	'workbench.action.interactive.*',
 +	'ipynb.*',
++	'workbench.panel.repl.view.*',
++	'extension.node-debug.*',
++	'extension.pwa-node-debug.*',
++	'extension.js-debug.*',
 +];
 +
 +class HiddenCommandsImpl {
