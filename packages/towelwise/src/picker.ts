@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { Layout, SavedGrid, attachLabels, leafCount, parseLayout, parseSavedGrid, toSaved } from './grid';
 import { LayoutState, Orientation, PARTS, PartName, Sizes, orientationOf, parseLayoutState, parseSizes, toProportions, validateTyped } from './sizes';
 
 // What the Edit Hyperspace Layout page edits: which items hyperspace hides, plus the full-screen switch.
@@ -52,6 +53,36 @@ const liveSizeEnv: SizeEnv = {
     }
   },
   write: (value) => section().update('sizes', value, vscode.ConfigurationTarget.Global),
+};
+
+// What the editor grid controls need: the live grid with a label per cell (in the grid's order), and the setting.
+export interface GridEnv {
+  read(): PromiseLike<{ layout: Layout; labels: string[] } | undefined>;
+  write(value: SavedGrid | undefined): PromiseLike<void>;
+}
+
+// A tab's name for the picker's mock: the agents by name, a terminal as Terminal, anything else by its own title.
+function tabLabel(tab: vscode.Tab | undefined): string {
+  const input = tab?.input;
+  if (input instanceof vscode.TabInputWebview && input.viewType.includes('claudeVSCodePanel')) return 'Claude Code';
+  if (input instanceof vscode.TabInputCustom && input.viewType === 'chatgpt.conversationEditor') return 'Codex';
+  if (input instanceof vscode.TabInputTerminal) return 'Terminal';
+  return tab?.label ?? '';
+}
+
+const liveGridEnv: GridEnv = {
+  read: async () => {
+    try {
+      const layout = parseLayout(await vscode.commands.executeCommand('vscode.getEditorLayout'));
+      if (!layout) return undefined;
+      // Groups are numbered in the grid's reading order, but the list is not.
+      const groups = [...vscode.window.tabGroups.all].sort((a, b) => a.viewColumn - b.viewColumn);
+      return { layout, labels: groups.map((g) => tabLabel(g.activeTab)) };
+    } catch {
+      return undefined;
+    }
+  },
+  write: (value) => section().update('editorGrid', value, vscode.ConfigurationTarget.Global),
 };
 
 const NEEDS_IDE = 'Sizes need Towelwise AI, the IDE. They cannot be set from plain VS Code.';
@@ -111,9 +142,15 @@ export class Draft {
   // What is open in each area, from the last live read that worked. Display only.
   private names: Partial<Record<PartName, string>> = {};
 
+  // The editor grid as drafted; undefined means none is saved.
+  private grid?: SavedGrid;
+  private baselineGrid = '';
+  private gridNote?: string;
+
   constructor(
     private write: Write = writeGlobal,
     private env: SizeEnv = liveSizeEnv,
+    private grids: GridEnv = liveGridEnv,
   ) {
     for (const { option } of OPTIONS) {
       const applied = section().get<boolean>(option, false);
@@ -124,6 +161,38 @@ export class Draft {
     this.percent = toPercents(saved);
     this.orientation = saved.panelOrientation;
     this.baselineSizes = JSON.stringify(this.sizesObject());
+    this.grid = parseSavedGrid(section().get<unknown>('editorGrid'), () => undefined);
+    this.baselineGrid = JSON.stringify(this.grid ?? null);
+  }
+
+  gridView(): { saved?: SavedGrid; note?: string } {
+    return { saved: this.grid, note: this.gridNote };
+  }
+
+  /**
+   * Reads the live editor area and drafts its columns and rows as proportions, labelled by what each cell holds.
+   * It runs on the queue Save uses, so Clear and Save pressed meanwhile are ordered after it.
+   */
+  useCurrentLayout(): Promise<void> {
+    return this.enqueue(async () => {
+      const read = await this.grids.read();
+      if (!read) {
+        this.gridNote = 'Could not read the editor layout.';
+        return;
+      }
+      const grid = attachLabels(toSaved(read.layout), read.labels);
+      this.grid = grid;
+      this.gridNote =
+        leafCount(grid) === 1 ? 'Only one editor group is open, so there is nothing to apply.' : 'Filled from the current layout.';
+    });
+  }
+
+  /** Drops the drafted grid, so hyperspace leaves the editor area's columns and rows alone. */
+  clearGrid(): Promise<void> {
+    return this.enqueue(() => {
+      this.grid = undefined;
+      this.gridNote = 'No editor grid will be saved.';
+    });
   }
 
   /** Finds out whether this window has the core bridge, so the size controls can say so. */
@@ -157,7 +226,11 @@ export class Draft {
   }
 
   /** Reads the live window and fills the visible parts' sizes as percentages. A hidden part keeps its value. */
-  async useCurrentSizes(): Promise<void> {
+  useCurrentSizes(): Promise<void> {
+    return this.enqueue(() => this.readSizes());
+  }
+
+  private async readSizes(): Promise<void> {
     const state = await this.env.read();
     if (!state) {
       this.available = false;
@@ -184,25 +257,25 @@ export class Draft {
   /**
    * Sets one size from text the person typed. Empty clears it, meaning hyperspace leaves that part alone. A typed
    * panel size belongs to the side the panel is on now, so that is read again; without a live read, the old side stays.
-   * The value is set at once; the side is read on the same queue Save uses, so a Save pressed meanwhile waits for it.
+   * The whole edit runs on the queue Save and the captures use, so it is ordered with them: a capture started
+   * earlier cannot overwrite it, and a Save pressed meanwhile waits for it.
    */
   setSize(part: string, text: string): Promise<void> {
     if (!(PARTS as readonly string[]).includes(part) || typeof text !== 'string') throw new Error(`Not a size: ${String(part)}`);
     const name = part as PartName;
-    if (text.trim() === '') {
-      delete this.percent[name];
-      this.typed.delete(name);
-      return Promise.resolve();
-    }
-    this.percent[name] = Number(text);
-    this.typed.add(name);
-    if (name !== 'panel') return Promise.resolve();
-    const run = this.queue.then(async () => {
-      const state = await this.env.read();
-      if (state) this.orientation = orientationOf(state.panelPosition);
+    return this.enqueue(async () => {
+      if (text.trim() === '') {
+        delete this.percent[name];
+        this.typed.delete(name);
+        return;
+      }
+      this.percent[name] = Number(text);
+      this.typed.add(name);
+      if (name === 'panel') {
+        const state = await this.env.read();
+        if (state) this.orientation = orientationOf(state.panelPosition);
+      }
     });
-    this.queue = run.catch(() => undefined);
-    return run;
   }
 
   private sizesObject(): Sizes {
@@ -232,7 +305,7 @@ export class Draft {
   }
 
   savedOptions(): string[] {
-    return [...OPTIONS.map((o) => o.option), 'sizes'].filter((option) => this.saved.has(option));
+    return [...OPTIONS.map((o) => o.option), 'sizes', 'editorGrid'].filter((option) => this.saved.has(option));
   }
 
   choose(option: string, choice: Choice): void {
@@ -246,13 +319,19 @@ export class Draft {
     this.value.set('fullScreen', on);
   }
 
-  // Saves run one after another: a Save pressed while another is writing waits, then sees what the first saved.
+  // Saves and every edit that reads the live window run one after another, in the order they arrive: a Save pressed
+  // while a capture is reading waits and then saves what the capture drafted, and one pressed while another is
+  // writing waits and then sees what the first saved.
   private queue: Promise<unknown> = Promise.resolve();
 
-  save(): Promise<SaveResult> {
-    const run = this.queue.then(() => this.saveNow());
+  private enqueue<T>(job: () => Promise<T> | T): Promise<T> {
+    const run = this.queue.then(job);
     this.queue = run.catch(() => undefined);
     return run;
+  }
+
+  save(): Promise<SaveResult> {
+    return this.enqueue(() => this.saveNow());
   }
 
   // One option at a time, so a failure part-way leaves the earlier ones saved and the rest retryable.
@@ -287,6 +366,17 @@ export class Draft {
       this.saved.add('sizes');
       this.baselineSizes = json;
     }
+    const gridJson = JSON.stringify(this.grid ?? null);
+    if (gridJson !== this.baselineGrid) {
+      try {
+        await this.grids.write(this.grid);
+      } catch (e) {
+        return { written, failed: { option: 'editorGrid', message: e instanceof Error ? e.message : String(e) } };
+      }
+      written.push('editorGrid');
+      this.saved.add('editorGrid');
+      this.baselineGrid = gridJson;
+    }
     return { written };
   }
 }
@@ -295,14 +385,14 @@ export type Message =
   | { type: 'ready' | 'save' | 'cancel' }
   | { type: 'choose'; option: string; choice: Choice }
   | { type: 'fullScreen'; on: boolean }
-  | { type: 'useCurrentSizes' }
+  | { type: 'useCurrentSizes' | 'useCurrentLayout' | 'clearGrid' }
   | { type: 'size'; part: PartName; value: string };
 
 // The page is untrusted input: anything that is not exactly one of these messages is dropped.
 export function parseMessage(raw: unknown): Message | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
   const m = raw as Record<string, unknown>;
-  if (m.type === 'ready' || m.type === 'save' || m.type === 'cancel' || m.type === 'useCurrentSizes') return { type: m.type };
+  if (m.type === 'ready' || m.type === 'save' || m.type === 'cancel' || m.type === 'useCurrentSizes' || m.type === 'useCurrentLayout' || m.type === 'clearGrid') return { type: m.type };
   if (m.type === 'size' && typeof m.value === 'string' && PARTS.includes(m.part as PartName)) {
     return { type: 'size', part: m.part as PartName, value: m.value };
   }

@@ -35,6 +35,7 @@ suite('hyperspace', () => {
     await config().update(LAYOUT_CONTROL, undefined, vscode.ConfigurationTarget.Workspace);
     await config().update(FULL_SCREEN, undefined, vscode.ConfigurationTarget.Global);
     await config().update('towelwise.hyperspace.sizes', undefined, vscode.ConfigurationTarget.Global);
+    await config().update('towelwise.hyperspace.editorGrid', undefined, vscode.ConfigurationTarget.Global);
     await config().update('towelwise.hyperspace.hideBottomPanel', undefined, vscode.ConfigurationTarget.Global);
     await config().update(HIDE_COMMAND_CENTER, undefined, vscode.ConfigurationTarget.Global);
     await config().update(HIDE_LAYOUT_CONTROLS, undefined, vscode.ConfigurationTarget.Global);
@@ -424,5 +425,153 @@ suite('hyperspace', () => {
     assert.strictEqual(isActive(storageDir), true);
     await toggle(storageDir, win);
     assert.deepStrictEqual(globalValues(), before);
+  });
+
+  // A stand-in for the editor area's grid: the layout it reports, what was applied, and optional failures.
+  const GRID = 'towelwise.hyperspace.editorGrid';
+  const columns = (...sizes: number[]) => ({ orientation: 0, groups: sizes.map((size) => ({ size })) });
+  const savedColumns = (...sizes: number[]) => columns(...sizes);
+  const gridWindow = (windowId: string, live: unknown, opts: { failRead?: boolean; failApply?: boolean; adjusted?: unknown } = {}) => {
+    const base = sizedWindow(windowId);
+    const applied: unknown[] = [];
+    const order: string[] = [];
+    const setSize = base.bridge.setSize;
+    base.bridge.setSize = async (part: string, pixels: number) => {
+      order.push(`size:${part}`);
+      return setSize(part, pixels);
+    };
+    const win = {
+      ...base,
+      applied,
+      order,
+      live,
+      grid: {
+        read: async () => {
+          if (opts.failRead) throw new Error('read failed');
+          return win.live;
+        },
+        apply: async (layout: unknown) => {
+          order.push('grid');
+          if (opts.failApply) throw new Error('apply failed');
+          applied.push(layout);
+          // The grid ends up as asked, unless the test says VS Code adjusted it.
+          win.live = opts.adjusted ?? layout;
+        },
+      },
+    };
+    return win;
+  };
+  const saveGrid = (value: unknown) => config().update(GRID, value, vscode.ConfigurationTarget.Global);
+
+  test('a jump applies the saved proportions after the side bar sizes, and leaving puts the old ones back', async () => {
+    await saveSizes({ sidebar: 0.1 });
+    await saveGrid(savedColumns(0.25, 0.25, 0.5));
+    const win = gridWindow('a', columns(500, 300, 200));
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, [columns(0.25, 0.25, 0.5)]);
+    assert.deepStrictEqual(win.order, ['size:sidebar', 'grid']);
+    win.applied.length = 0;
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, [columns(500, 300, 200)]);
+  });
+
+  test('a different shape is left alone on a jump, with one message', async () => {
+    await saveGrid(savedColumns(0.5, 0.5));
+    const win = gridWindow('a', columns(500, 300, 200));
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, []);
+    assert.strictEqual(win.told.length, 1);
+    await toggle(storageDir, win);
+    // Leaving still restores the grid it recorded, which has not changed.
+    assert.deepStrictEqual(win.applied, [columns(500, 300, 200)]);
+  });
+
+  test('restore leaves the grid alone when its shape changed meanwhile, or in another window', async () => {
+    await saveGrid(savedColumns(0.5, 0.5));
+    const win = gridWindow('a', columns(500, 500));
+    await toggle(storageDir, win);
+    win.applied.length = 0;
+    win.live = columns(300, 300, 400);
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, []);
+
+    const a = gridWindow('a', columns(500, 500));
+    const b = gridWindow('b', columns(500, 500));
+    await toggle(storageDir, a);
+    a.applied.length = 0;
+    await toggle(storageDir, b);
+    assert.deepStrictEqual(b.applied, []);
+    assert.strictEqual(isActive(storageDir), false);
+  });
+
+  test('with no saved grid nothing is applied on a jump, but restore still puts a changed grid back', async () => {
+    const win = gridWindow('a', columns(500, 500));
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, []);
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(stateFile(storageDir), 'utf8')).grid, columns(500, 500));
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, [columns(500, 500)]);
+  });
+
+  test('a saved grid of one group applies nothing', async () => {
+    await saveGrid({ orientation: 0, groups: [{ size: 1 }] });
+    const win = gridWindow('a', columns(1));
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, []);
+    assert.strictEqual(win.told.length, 0);
+    await toggle(storageDir, win);
+  });
+
+  test('a grid that fails to read or apply is logged and never stops a jump or a restore', async () => {
+    await saveGrid(savedColumns(0.5, 0.5));
+    const before = globalValues();
+    const unreadable = gridWindow('a', columns(500, 500), { failRead: true });
+    await toggle(storageDir, unreadable);
+    assert.strictEqual(JSON.parse(fs.readFileSync(stateFile(storageDir), 'utf8')).grid, undefined);
+    await toggle(storageDir, unreadable);
+    assert.deepStrictEqual(globalValues(), before);
+
+    const failing = gridWindow('a', columns(500, 500), { failApply: true });
+    await toggle(storageDir, failing);
+    assert.ok(failing.logs.some((l) => /could not apply/.test(l)));
+    await toggle(storageDir, failing);
+    assert.strictEqual(isActive(storageDir), false);
+    assert.deepStrictEqual(globalValues(), before);
+  });
+
+  test('a hand-edited grid that does not fit is ignored on a jump', async () => {
+    await saveGrid({ orientation: 0, groups: [{ size: 'wide' }] });
+    const win = gridWindow('a', columns(500, 500));
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, []);
+    assert.ok(win.logs.some((l) => /ignored editorGrid/.test(l)));
+    await toggle(storageDir, win);
+  });
+
+  test('a valid snapshot with bad grid data restores its settings and skips the grid', async () => {
+    await config().update(STATUS_BAR, false, vscode.ConfigurationTarget.Global);
+    fs.writeFileSync(
+      stateFile(storageDir),
+      JSON.stringify({ settings: [{ key: STATUS_BAR, had: true, value: true }], fullScreen: false, windowId: 'a', grid: { orientation: 5 } }),
+    );
+    const win = gridWindow('a', columns(500, 500));
+    await toggle(storageDir, win);
+    assert.strictEqual(config().inspect(STATUS_BAR)?.globalValue, true);
+    assert.deepStrictEqual(win.applied, []);
+    assert.strictEqual(isActive(storageDir), false);
+  });
+
+  test('an applied grid that VS Code adjusted is logged, and one that came out as asked is not', async () => {
+    await saveGrid(savedColumns(0.25, 0.25, 0.5));
+    const exact = gridWindow('a', columns(500, 300, 200));
+    await toggle(storageDir, exact);
+    assert.ok(exact.logs.includes('editor grid: proportions applied'));
+    await toggle(storageDir, exact);
+
+    const adjusted = gridWindow('a', columns(500, 300, 200), { adjusted: columns(0.4, 0.1, 0.5) });
+    await toggle(storageDir, adjusted);
+    assert.ok(adjusted.logs.some((l) => /adjusted by up to 15%/.test(l)));
+    await toggle(storageDir, adjusted);
+    assert.strictEqual(isActive(storageDir), false);
   });
 });

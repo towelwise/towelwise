@@ -34,6 +34,7 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
       saved: draft.savedOptions(),
       sizes: draft.sizesView(),
       names: draft.namesView(),
+      grid: draft.gridView(),
       hyperspaceOn: isActive(storageDir),
       ...extra,
     });
@@ -58,6 +59,14 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
             break;
           case 'useCurrentSizes':
             await draft.useCurrentSizes();
+            await send();
+            break;
+          case 'useCurrentLayout':
+            await draft.useCurrentLayout();
+            await send();
+            break;
+          case 'clearGrid':
+            await draft.clearGrid();
             await send();
             break;
           case 'size':

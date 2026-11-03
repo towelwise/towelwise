@@ -554,4 +554,191 @@ suite('picker', () => {
     assert.deepStrictEqual(writes, []);
     assert.deepStrictEqual(sizeWrites, []);
   });
+
+  // The editor grid: a stand-in for the live grid and a recording writer.
+  const gridEnv = (read: { layout: unknown; labels: string[] } | undefined, failWrite = false) => {
+    const writes: unknown[] = [];
+    const env = {
+      read: async () => read as never,
+      write: async (value: unknown) => {
+        if (failWrite) throw new Error('cannot write the grid');
+        writes.push(value);
+      },
+    };
+    return { env, writes };
+  };
+  const threeColumns = { orientation: 0, groups: [{ size: 400 }, { size: 300 }, { size: 300, groups: [{ size: 600 }, { size: 200 }] }] };
+  const noSizes = sizeEnv(undefined).env as never;
+
+  test('Use current layout drafts the proportions and labels, and Save writes them once', async () => {
+    const { env, writes } = gridEnv({ layout: threeColumns, labels: ['Claude Code', 'Codex', 'Terminal', 'notes.md'] });
+    const draft = new Draft(undefined, noSizes, env as never);
+    await draft.useCurrentLayout();
+    assert.deepStrictEqual(draft.gridView().saved?.groups[2], {
+      size: 0.3,
+      groups: [{ size: 0.75, label: 'Terminal' }, { size: 0.25, label: 'notes.md' }],
+    });
+    const result = await draft.save();
+    assert.deepStrictEqual(result.written, ['editorGrid']);
+    assert.strictEqual(writes.length, 1);
+    assert.deepStrictEqual(draft.savedOptions(), ['editorGrid']);
+    assert.deepStrictEqual((await draft.save()).written, []);
+  });
+
+  test('Clear drops the drafted grid, and Save then resets the setting', async () => {
+    const { env, writes } = gridEnv({ layout: threeColumns, labels: [] });
+    const draft = new Draft(undefined, noSizes, env as never);
+    await draft.useCurrentLayout();
+    await draft.save();
+    await draft.clearGrid();
+    assert.strictEqual(draft.gridView().saved, undefined);
+    assert.deepStrictEqual((await draft.save()).written, ['editorGrid']);
+    assert.strictEqual(writes[1], undefined);
+  });
+
+  test('a single editor group is drafted with a note, and an unreadable layout keeps the draft', async () => {
+    let read: { layout: unknown; labels: string[] } | undefined = { layout: { orientation: 0, groups: [{ size: 1 }] }, labels: ['x'] };
+    const env = { read: async () => read as never, write: async () => undefined };
+    const draft = new Draft(undefined, noSizes, env as never);
+    await draft.useCurrentLayout();
+    assert.match(draft.gridView().note ?? '', /nothing to apply/);
+    read = undefined;
+    await draft.useCurrentLayout();
+    assert.match(draft.gridView().note ?? '', /Could not read/);
+    assert.ok(draft.gridView().saved);
+  });
+
+  test('a failed grid write names the grid, keeps the draft, and a second Save retries', async () => {
+    const { env } = gridEnv({ layout: threeColumns, labels: [] }, true);
+    const draft = new Draft(undefined, noSizes, env as never);
+    await draft.useCurrentLayout();
+    const first = await draft.save();
+    assert.strictEqual(first.failed?.option, 'editorGrid');
+    assert.match(first.failed?.message ?? '', /cannot write the grid/);
+    assert.ok(draft.gridView().saved);
+  });
+
+  test('grid messages from the page are checked', () => {
+    for (const type of ['useCurrentLayout', 'clearGrid']) assert.deepStrictEqual(parseMessage({ type }), { type });
+  });
+
+  test('Clear pressed while a capture is reading is applied after it, and Save after both', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const writes: unknown[] = [];
+    const env = {
+      read: async () => {
+        await gate;
+        return { layout: threeColumns, labels: [] } as never;
+      },
+      write: async (value: unknown) => void writes.push(value),
+    };
+    const draft = new Draft(undefined, noSizes, env as never);
+    // The page sends the three messages without waiting between them.
+    const capture = draft.useCurrentLayout();
+    const clear = draft.clearGrid();
+    const save = draft.save();
+    release();
+    await Promise.all([capture, clear]);
+    assert.deepStrictEqual((await save).written, []);
+    assert.strictEqual(draft.gridView().saved, undefined);
+    assert.deepStrictEqual(writes, []);
+  });
+
+  test('a Save pressed while a capture is reading saves what the capture drafted', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const writes: unknown[] = [];
+    const env = {
+      read: async () => {
+        await gate;
+        return { layout: threeColumns, labels: [] } as never;
+      },
+      write: async (value: unknown) => void writes.push(value),
+    };
+    const draft = new Draft(undefined, noSizes, env as never);
+    const capture = draft.useCurrentLayout();
+    const save = draft.save();
+    release();
+    await capture;
+    assert.deepStrictEqual((await save).written, ['editorGrid']);
+    assert.strictEqual(writes.length, 1);
+  });
+
+  test('a Save pressed while Use current sizes is reading saves the sizes it filled', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const writes: unknown[] = [];
+    const env = {
+      read: async () => {
+        await gate;
+        return live();
+      },
+      write: async (value: unknown) => void writes.push(value),
+    };
+    const draft = new Draft(undefined, env as never);
+    const use = draft.useCurrentSizes();
+    const save = draft.save();
+    release();
+    await use;
+    assert.deepStrictEqual((await save).written, ['sizes']);
+    assert.strictEqual(writes.length, 1);
+  });
+
+  test('a size typed or cleared while Use current sizes is reading wins over the capture', async () => {
+    for (const edit of ['35', '']) {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let first = true;
+      const writes: unknown[] = [];
+      const env = {
+        read: async () => {
+          // Only the capture's read is held open.
+          if (first) {
+            first = false;
+            await gate;
+          }
+          return live();
+        },
+        write: async (value: unknown) => void writes.push(value),
+      };
+      const draft = new Draft(undefined, env as never);
+      const capture = draft.useCurrentSizes();
+      const typed = draft.setSize('sidebar', edit);
+      const save = draft.save();
+      release();
+      await Promise.all([capture, typed]);
+      assert.deepStrictEqual((await save).written, ['sizes']);
+      const sidebar = (writes[0] as { sidebar?: number }).sidebar;
+      assert.strictEqual(sidebar, edit === '' ? undefined : 0.35, `edit "${edit}"`);
+      assert.deepStrictEqual(draft.sizesView().rows.map((r) => r.typed), [edit !== '', false, false]);
+    }
+  });
+
+  test('a panel size typed while Use current sizes is reading keeps its typed flag and the live side', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let first = true;
+    const writes: unknown[] = [];
+    const env = {
+      read: async () => {
+        if (first) {
+          first = false;
+          await gate;
+        }
+        return live({ panelPosition: 'right' });
+      },
+      write: async (value: unknown) => void writes.push(value),
+    };
+    const draft = new Draft(undefined, env as never);
+    const capture = draft.useCurrentSizes();
+    const typed = draft.setSize('panel', '30');
+    const save = draft.save();
+    release();
+    await Promise.all([capture, typed]);
+    assert.deepStrictEqual((await save).written, ['sizes']);
+    assert.deepStrictEqual((writes[0] as { panel: number; panelOrientation: string }).panel, 0.3);
+    assert.strictEqual((writes[0] as { panelOrientation: string }).panelOrientation, 'across');
+    assert.deepStrictEqual(draft.sizesView().rows.map((r) => r.typed), [false, false, true]);
+  });
 });

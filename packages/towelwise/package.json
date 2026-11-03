@@ -156,6 +156,16 @@
               "panelOrientation": { "enum": ["across", "down"] }
             },
             "additionalProperties": false
+          },
+          "towelwise.hyperspace.editorGrid": {
+            "type": "object",
+            "default": {},
+            "description": "The editor area's columns and rows that hyperspace re-applies: orientation (0 for columns, 1 for rows) and groups, each with a size as a proportion of its parent, an optional label for the picker, and optional nested groups. Set it with Use current layout in Edit Hyperspace Layout. It only changes proportions; it never opens, closes or moves a tab, and it is left alone if the editor area's columns and rows no longer match.",
+            "properties": {
+              "orientation": { "enum": [0, 1] },
+              "groups": { "type": "array", "items": { "type": "object" } }
+            },
+            "additionalProperties": false
           }
         }
       },

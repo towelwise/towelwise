@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { Layout, leafCount, maxDifference, parseLayout, parseSavedGrid, sameShape, toLayout } from './grid';
 import { withLock } from './lock';
 import {
   LayoutState,
@@ -23,11 +24,19 @@ interface Saved {
 
 // fullScreen records that the jump toggled full screen in the window windowId, so only that window toggles it back.
 // sizes are the pixel sizes found before the jump, for the same window; absent if none were read.
+// grid is the editor area's layout found before the jump, for the same window.
 interface Snapshot {
   settings: Saved[];
   fullScreen: boolean;
   windowId?: string;
   sizes?: Recorded;
+  grid?: Layout;
+}
+
+// Reads and applies the editor area's grid of groups in the window it belongs to.
+interface Grid {
+  read(): PromiseLike<unknown>;
+  apply(layout: Layout): PromiseLike<unknown>;
 }
 
 // Reads and sets part sizes in the window it belongs to. Absent without the core bridge.
@@ -42,6 +51,7 @@ interface Host {
   windowId: string;
   run(command: string): PromiseLike<unknown>;
   bridge?: Bridge;
+  grid?: Grid;
   log?(line: string): void;
   tell?(message: string): void;
 }
@@ -58,6 +68,10 @@ const DEFAULT_HOST: Host = {
   bridge: {
     state: async () => parseLayoutState(await vscode.commands.executeCommand('_towelwise.layout.state')),
     setSize: (part, pixels) => vscode.commands.executeCommand('_towelwise.layout.setSize', part, pixels),
+  },
+  grid: {
+    read: () => vscode.commands.executeCommand('vscode.getEditorLayout'),
+    apply: (layout) => vscode.commands.executeCommand('vscode.setEditorLayout', layout),
   },
   log: (line) => logLine(line),
   tell: (message) => void vscode.window.showInformationMessage(message),
@@ -146,6 +160,9 @@ async function jump(storageDir: string, host: Host): Promise<string[]> {
   const wanted = parseSizes(options.get<unknown>('sizes'), (line) => host.log?.(line));
   const sizing = await readState(host);
   if (sizing) snapshot.sizes = record(sizing);
+  // The editor grid is recorded the same way, whether or not a grid is saved.
+  const liveGrid = await readGrid(host);
+  if (liveGrid) snapshot.grid = liveGrid;
 
   // Published first, so a crash mid-jump stays recoverable.
   publish(storageDir, snapshot);
@@ -168,6 +185,9 @@ async function jump(storageDir: string, host: Host): Promise<string[]> {
     const kept = new Set(AREAS.filter(({ option }) => !options.get<boolean>(option)).map(({ part }) => part));
     await applySizes(host, wanted, kept);
   }
+  // After the side bars and panel, so the grid's proportions apply to the editor area's final size.
+  const savedGrid = parseSavedGrid(options.get<unknown>('editorGrid'), (line) => host.log?.(line));
+  if (savedGrid && leafCount(savedGrid) > 1) await applyGrid(host, savedGrid);
   // A fresh read: `config` above is a snapshot taken before the updates.
   const after = vscode.workspace.getConfiguration();
   return chrome.filter(({ key, hidden }) => after.get(key) !== hidden).map(({ key }) => key);
@@ -206,6 +226,51 @@ async function applySizes(host: Host, wanted: ReturnType<typeof parseSizes>, kep
   await setSizes(host, set);
 }
 
+async function readGrid(host: Host): Promise<Layout | undefined> {
+  try {
+    const layout = parseLayout(await host.grid?.read());
+    if (!layout) host.log?.('editor grid: could not read the layout, so it is left alone');
+    return layout;
+  } catch (e) {
+    host.log?.(`editor grid: could not read the layout (${errorText(e)}), so it is left alone`);
+    return undefined;
+  }
+}
+
+// Pixel rounding alone stays well inside this.
+const GRID_TOLERANCE = 0.01;
+
+// Applies a layout if the live grid still has the same shape; a different shape is left alone.
+async function setGrid(host: Host, layout: Layout, mismatch: () => void): Promise<void> {
+  const live = await readGrid(host);
+  if (!live) return;
+  if (!sameShape(live, layout)) return mismatch();
+  try {
+    await host.grid?.apply(layout);
+    // VS Code may adjust what it was asked for (minimum editor sizes), so read it back and log any difference.
+    const after = await readGrid(host);
+    const off = after && sameShape(after, layout) ? maxDifference(layout, after) : undefined;
+    host.log?.(
+      off !== undefined && off > GRID_TOLERANCE
+        ? `editor grid: proportions applied, but adjusted by up to ${Math.round(off * 100)}% of a parent`
+        : 'editor grid: proportions applied',
+    );
+  } catch (e) {
+    host.log?.(`editor grid: could not apply the layout (${errorText(e)})`);
+  }
+}
+
+async function applyGrid(host: Host, saved: ReturnType<typeof parseSavedGrid> & object): Promise<void> {
+  await setGrid(host, toLayout(saved), () => {
+    host.log?.('editor grid: different columns and rows than saved, so it is left alone');
+    host.tell?.("Towelwise: the editor area's columns and rows are not the same as when you saved your layout, so their proportions were left alone.");
+  });
+}
+
+async function restoreGrid(host: Host, recorded: Layout): Promise<void> {
+  await setGrid(host, recorded, () => host.log?.('editor grid: the columns and rows changed while in hyperspace, so it is left alone'));
+}
+
 async function restoreSizes(host: Host, recorded: Recorded): Promise<void> {
   const state = await readState(host);
   if (!state) return;
@@ -228,6 +293,8 @@ function readSnapshot(file: string): Snapshot {
     }
     // Size data is optional: if it does not fit, sizes are skipped and the settings still restore.
     if (snapshot.sizes !== undefined) snapshot.sizes = parseRecorded(snapshot.sizes);
+    // The same for the editor grid: absent or unfit data skips it.
+    if (snapshot.grid !== undefined) snapshot.grid = parseLayout(snapshot.grid);
     return snapshot;
   } catch {
     fs.rmSync(file, { force: true });
@@ -237,7 +304,7 @@ function readSnapshot(file: string): Snapshot {
 
 async function restoreSnapshot(storageDir: string, host: Host): Promise<void> {
   const file = stateFile(storageDir);
-  const { settings, fullScreen, windowId, sizes } = readSnapshot(file);
+  const { settings, fullScreen, windowId, sizes, grid } = readSnapshot(file);
   const config = vscode.workspace.getConfiguration();
   for (const s of settings) {
     await config.update(s.key, s.had ? s.value : undefined, GLOBAL);
@@ -254,4 +321,5 @@ async function restoreSnapshot(storageDir: string, host: Host): Promise<void> {
   }
   // Sizes last, once the window is its normal size again, and only in the window that jumped.
   if (sizes && jumper) await restoreSizes(host, sizes);
+  if (grid && jumper) await restoreGrid(host, grid);
 }

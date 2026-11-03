@@ -102,6 +102,44 @@ function render(state) {
     app.append(box);
   }
 
+  // Editor grid: captured from the live editor area, shown as nested boxes sized by their proportions.
+  if (state.grid) {
+    const box = el('section', 'grid');
+    box.append(el('h2', '', 'Editor grid'));
+    box.append(el('p', 'legend', 'Arrange the columns and rows in the editor area yourself, drag your agents and terminals into them, then press Use current layout. Hyperspace re-applies the proportions; it never opens or moves anything.'));
+    const use = el('button', '', 'Use current layout');
+    use.dataset.key = 'useCurrentLayout';
+    use.addEventListener('click', () => vscodeApi.postMessage({ type: 'useCurrentLayout' }));
+    const clear = el('button', '', 'Clear');
+    clear.dataset.key = 'clearGrid';
+    clear.addEventListener('click', () => vscodeApi.postMessage({ type: 'clearGrid' }));
+    const buttons = el('div', 'actions');
+    buttons.append(use, clear);
+    box.append(buttons);
+    const draw = (nodes, horizontal) => {
+      const row = el('div', horizontal ? 'cells across' : 'cells down');
+      for (const node of nodes) {
+        const cell = el('div', node.groups ? 'cell split' : 'cell');
+        cell.style.flexGrow = String(Math.round(node.size * 1000));
+        if (node.groups) cell.append(draw(node.groups, !horizontal));
+        else cell.append(el('span', 'cell-label', node.label || 'Editor group'));
+        row.append(cell);
+      }
+      return row;
+    };
+    if (state.grid.saved) {
+      const mock = draw(state.grid.saved.groups, state.grid.saved.orientation === 0);
+      mock.classList.add('grid-mock');
+      mock.setAttribute('role', 'img');
+      mock.setAttribute('aria-label', 'The editor grid that will be saved');
+      box.append(mock);
+    } else {
+      box.append(el('p', 'info', 'No editor grid is saved. Hyperspace leaves the editor area as it is.'));
+    }
+    if (state.grid.note) box.append(el('p', 'info', state.grid.note));
+    app.append(box);
+  }
+
   if (state.hyperspaceOn) {
     app.append(el('p', 'info', 'Hyperspace is on now. What you save applies from the next jump; this session is unchanged.'));
   }
@@ -116,7 +154,7 @@ function render(state) {
   actions.append(save, cancel);
   app.append(actions);
 
-  const labelOf = (option) => (option === 'sizes' ? 'Sizes' : state.items.find((i) => i.option === option)?.label ?? option);
+  const labelOf = (option) => (option === 'sizes' ? 'Sizes' : option === 'editorGrid' ? 'Editor grid' : state.items.find((i) => i.option === option)?.label ?? option);
   const status = el('p', 'status');
   status.setAttribute('role', 'status');
   if (lastResult) {

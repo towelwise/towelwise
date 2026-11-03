@@ -59,4 +59,14 @@ suite('towelwise.towelwise', () => {
     assert.strictEqual(sizes.additionalProperties, false);
     assert.deepStrictEqual(Object.keys(sizes.properties), ['sidebar', 'auxiliarybar', 'panel', 'panelOrientation']);
   });
+
+  test('the editor grid setting is an object with an orientation and groups, and nothing else', () => {
+    const configuration = vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON.contributes.configuration;
+    const grid = configuration.find((c: { title: string }) => c.title === 'Towelwise: Hyperspace').properties['towelwise.hyperspace.editorGrid'];
+    assert.strictEqual(grid.type, 'object');
+    assert.deepStrictEqual(grid.default, {});
+    assert.strictEqual(grid.scope, undefined);
+    assert.strictEqual(grid.additionalProperties, false);
+    assert.deepStrictEqual(Object.keys(grid.properties), ['orientation', 'groups']);
+  });
 });
