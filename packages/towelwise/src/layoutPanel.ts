@@ -26,7 +26,8 @@ const liveEnv: LayoutEnv = {
   },
 };
 
-export function openLayoutPage(context: vscode.ExtensionContext, log: (line: string) => void): void {
+// `kept` is a draft carried over from a page that closed itself for a restore (see 'restore' below).
+export function openLayoutPage(context: vscode.ExtensionContext, log: (line: string) => void, kept?: LayoutDraft): void {
   if (current) {
     current.panel.reveal();
     return;
@@ -38,7 +39,7 @@ export function openLayoutPage(context: vscode.ExtensionContext, log: (line: str
     localResourceRoots: [media],
   });
   current = { panel };
-  const draft = new LayoutDraft(readSaved(log), liveEnv);
+  const draft = kept ?? new LayoutDraft(readSaved(log), liveEnv);
   const uri = (file: string) => panel.webview.asWebviewUri(vscode.Uri.joinPath(media, file)).toString();
   panel.webview.html = pageHtml({
     cspSource: panel.webview.cspSource,
@@ -108,7 +109,16 @@ export function openLayoutPage(context: vscode.ExtensionContext, log: (line: str
             await send({ result: await draft.save() });
             return;
           case 'restore':
-            await vscode.commands.executeCommand('towelwise.layout.restore');
+            // Restore moves focus between editor groups, which acts on the window that has focus. From this
+            // page's own window it would rearrange the page, so the page closes first, the restore runs in
+            // the main window, and the page comes back with the same unsaved draft.
+            panel.dispose();
+            await new Promise((resolve) => setTimeout(resolve, 300)); // let focus return to the main window
+            try {
+              await vscode.commands.executeCommand('towelwise.layout.restore');
+            } finally {
+              openLayoutPage(context, log, draft);
+            }
             return;
           case 'reload':
             await vscode.commands.executeCommand('workbench.action.reloadWindow');
@@ -125,5 +135,11 @@ export function openLayoutPage(context: vscode.ExtensionContext, log: (line: str
     undefined,
     context.subscriptions,
   );
-  panel.onDidDispose(() => (current = undefined), undefined, context.subscriptions);
+  panel.onDidDispose(
+    () => {
+      if (current?.panel === panel) current = undefined;
+    },
+    undefined,
+    context.subscriptions,
+  );
 }
