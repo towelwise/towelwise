@@ -38,8 +38,15 @@ function editorWindow(
     keepIgnored?: boolean;
     // What the host's planTerminal reports as falling back, for every terminal.
     terminalProblems?: string[];
+    // Groups in other editor windows (the Choose Layout page's, a floating file's). The grid never touches them, and
+    // groups() lists them after the main window's until the window counts are read, as the real tab-groups API does.
+    otherWindows?: Tab[][];
+    // What the bridge's focusMain answers; left out, there is no bridge.
+    focusMain?: boolean;
   } = {},
 ) {
+  const others: Group[] = (opts.otherWindows ?? []).map((tabs) => ({ tabs, held: tabs.length > 0 }));
+  let windowsRead = false;
   const opens: TerminalOpen[] = [];
   const groups: Group[] = (opts.start ?? [[]]).map((tabs) => ({ tabs, held: tabs.length > 0 }));
   const calls: string[] = [];
@@ -64,7 +71,13 @@ function editorWindow(
   };
 
   const editors: Editors = {
-    groups: () => [...groups],
+    groups: () => (windowsRead ? [...groups] : [...groups, ...others]),
+    useMainWindow: async () => {
+      windowsRead = true;
+    },
+    useAllWindows: () => {
+      windowsRead = false;
+    },
     tabs: (g) => (g as Group).tabs,
     kind: (t) => (t as Tab).holds,
     label: (t) => (t as Tab).label,
@@ -139,6 +152,14 @@ function editorWindow(
     parts: { sidebar: { visible: true, size: 300 }, auxiliarybar: { visible: true, size: 300 }, panel: { visible: true, size: 200 } },
   };
   const host: MyLayoutHost = {
+    ...(opts.focusMain === undefined
+      ? {}
+      : {
+          focusMain: async () => {
+            calls.push('focus main');
+            return opts.focusMain;
+          },
+        }),
     planTerminal: async (t: CellTerminal) => ({
       open: { name: terminalName(t), ...(t.folder ? { cwd: t.folder } : {}), ...(t.command ? { command: t.command } : {}) },
       problems: opts.terminalProblems ?? [],
@@ -171,7 +192,7 @@ function editorWindow(
     log: (line) => logs.push(line),
     tell: () => undefined,
   };
-  return { host, groups, calls, logs, editors, opens };
+  return { host, groups, others, calls, logs, editors, opens };
 }
 
 // Three columns, the third split into two rows: Claude Code, Codex, a terminal, and an empty cell.
@@ -402,6 +423,35 @@ suite('my layout: columns', () => {
       const out = await applyLayout(w.host, terminalGrid({ shell: 'gitbash' }));
       assert.deepStrictEqual(out.problems, ['Git Bash: Git Bash was not found on this machine, so it opened in the default shell']);
       assert.deepStrictEqual(w.groups.map((g) => g.tabs.map((t) => t.label)), [['Git Bash']]);
+    });
+  });
+
+  suite('with other editor windows open', () => {
+    test('places in the main window only, and leaves the other windows as they were', async () => {
+      const page = tab(undefined, 'Choose Layout');
+      const w = editorWindow({ otherWindows: [[page], [tab(undefined, 'notes.md')]] });
+      const out = await applyLayout(w.host, layout());
+      assert.deepStrictEqual(out.problems, []);
+      assert.deepStrictEqual(heldBy(w), [['claudeCode'], ['codex'], ['terminal'], []]);
+      assert.deepStrictEqual(w.others.map((g) => g.tabs.map((t) => t.label)), [['Choose Layout'], ['notes.md']]);
+    });
+
+    test('brings the main window to the front before the grid is set', async () => {
+      const w = editorWindow({ focusMain: true });
+      await applyLayout(w.host, layout());
+      assert.ok(w.calls.indexOf('focus main') >= 0 && w.calls.indexOf('focus main') < w.calls.indexOf('grid 4'), w.calls.join('; '));
+    });
+
+    test('if the main window cannot be brought to the front, the grid is left alone and that is reported; sizes still apply', async () => {
+      const w = editorWindow({ focusMain: false, start: [[tab()]] });
+      const out = await applyLayout(w.host, layout({ sizes: { sidebar: 0.2 } }));
+      assert.ok(!w.calls.some((c) => c.startsWith('grid') || c.startsWith('terminal') || c.startsWith('run')), w.calls.join('; '));
+      assert.ok(
+        out.problems.includes('the main window could not be brought to the front, so the editor grid was left alone; click the main window and run Restore Layout again'),
+        out.problems.join('; '),
+      );
+      assert.ok(w.calls.some((c) => c.startsWith('size sidebar')));
+      assert.deepStrictEqual(heldBy(w), [['file']]);
     });
   });
 

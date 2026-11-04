@@ -1,7 +1,7 @@
 import * as assert from 'node:assert';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { liveEditors } from '../liveEditors';
+import { liveEditors, setMainGroupCount } from '../liveEditors';
 
 // These run against the real editor area of the test window: the adapter is what the built app uses.
 const settings = () => vscode.workspace.getConfiguration('workbench.editor');
@@ -113,6 +113,119 @@ suite('live editors', () => {
         assert.deepStrictEqual(liveEditors.tabs(before[1]).map((t) => liveEditors.kind(t)), ['claudeCode']);
       } finally {
         panel.dispose();
+      }
+    });
+  });
+
+  suite('other editor windows', () => {
+    test("with the main window's count read, a floating window's groups are left out until all windows are wanted again", async function () {
+      this.timeout(30000);
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.5 }, { size: 0.5 }] });
+      await open('liveEditors.test.js', 1);
+      await open('columns.test.js', 2);
+      await open('grid.test.js', 2);
+      // The active file moves to a window of its own, as Choose Layout's page does; its group keeps the other file.
+      await vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow');
+      await until(() => vscode.window.tabGroups.all.length === 3, 'the floating window');
+      const restore = setMainGroupCount(async () => 2);
+      try {
+        assert.strictEqual(liveEditors.groups().length, 3, 'every window is listed until the main one is asked for');
+        await liveEditors.useMainWindow();
+        const main = liveEditors.groups();
+        assert.strictEqual(main.length, 2);
+        const labels = main.flatMap((g) => liveEditors.tabs(g).map((t) => liveEditors.label(t)));
+        assert.ok(labels.includes('columns.test.js') && !labels.includes('grid.test.js'), labels.join(', '));
+        liveEditors.useAllWindows();
+        assert.strictEqual(liveEditors.groups().length, 3);
+      } finally {
+        restore();
+        liveEditors.useAllWindows();
+        // Closing every tab in every window closes the floating one too.
+        await vscode.window.tabGroups.close(vscode.window.tabGroups.all.flatMap((g) => g.tabs));
+        await until(() => vscode.window.tabGroups.all.length <= 2, 'the floating window to close');
+      }
+    });
+
+    test("a floating window closing during a restore leaves the main window's groups, and the handles held for them, as they were", async function () {
+      this.timeout(30000);
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.5 }, { size: 0.5 }] });
+      await open('liveEditors.test.js', 1);
+      await open('columns.test.js', 2);
+      await open('grid.test.js', 2);
+      await vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow');
+      await until(() => vscode.window.tabGroups.all.length === 3, 'the floating window');
+      const restore = setMainGroupCount(async () => 2);
+      try {
+        await liveEditors.useMainWindow();
+        const held = liveEditors.groups();
+        assert.strictEqual(held.length, 2);
+        // The floating window closes with no new count read: the next thing a restore does is use the handles.
+        await vscode.window.tabGroups.close(vscode.window.tabGroups.all[2].tabs);
+        await until(() => vscode.window.tabGroups.all.length === 2, 'the floating window to close');
+        const after = liveEditors.groups();
+        assert.strictEqual(after.length, held.length);
+        held.forEach((handle, i) => assert.strictEqual(after[i], handle, `handle ${i} is not the same group`));
+        assert.strictEqual(liveEditors.tabs(held[0]).length, 1);
+      } finally {
+        restore();
+        liveEditors.useAllWindows();
+      }
+    });
+
+    test('a floating window closing while an agent opens a group of its own keeps every handle held for the main groups', async function () {
+      this.timeout(30000);
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.5 }, { size: 0.5 }] });
+      await open('liveEditors.test.js', 1);
+      await open('columns.test.js', 2);
+      await open('grid.test.js', 2);
+      await vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow');
+      await until(() => vscode.window.tabGroups.all.length === 3, 'the floating window');
+      // What the core bridge answers, as it changes: the main window has two groups, then the agent's makes three.
+      let main = 2;
+      const restore = setMainGroupCount(async () => main);
+      let panel: vscode.WebviewPanel | undefined;
+      try {
+        await liveEditors.useMainWindow();
+        const held = liveEditors.groups();
+        assert.strictEqual(held.length, 2);
+        // The floating window closes, then Claude Code's group opens in the main window, so the total of all groups is
+        // the same as before while the main window has one more.
+        await vscode.window.tabGroups.close(vscode.window.tabGroups.all[2].tabs);
+        await until(() => vscode.window.tabGroups.all.length === 2, 'the floating window to close');
+        // Closing a window can move focus (it does in older VS Code), so the first group is focused after it.
+        await liveEditors.focus(held[0]);
+        const opened = liveEditors.waitForTab('claudeCode', 10000);
+        await vscode.commands.executeCommand('workbench.action.newGroupRight');
+        main = 3;
+        panel = vscode.window.createWebviewPanel('claudeVSCodePanel', 'Claude Code (stand-in)', { viewColumn: vscode.ViewColumn.Two }, {});
+        assert.ok(await opened, 'the stand-in tab never opened');
+        await liveEditors.useMainWindow();
+        const after = liveEditors.groups();
+        assert.strictEqual(after.length, 3);
+        assert.strictEqual(after[0], held[0], 'the first handle is not the same group');
+        assert.strictEqual(after[2], held[1], 'the second handle is not the same group');
+        assert.deepStrictEqual(liveEditors.tabs(after[1]).map((t) => liveEditors.kind(t)), ['claudeCode']);
+      } finally {
+        panel?.dispose();
+        restore();
+        liveEditors.useAllWindows();
+      }
+    });
+
+    test('without the bridge, every group counts, as before', async () => {
+      const restore = setMainGroupCount(async () => {
+        throw new Error("command '_towelwise.layout.mainGroupCount' not found");
+      });
+      try {
+        await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.5 }, { size: 0.5 }] });
+        await liveEditors.useMainWindow();
+        assert.strictEqual(liveEditors.groups().length, vscode.window.tabGroups.all.length);
+      } finally {
+        restore();
+        liveEditors.useAllWindows();
       }
     });
   });

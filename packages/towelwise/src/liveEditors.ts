@@ -12,8 +12,37 @@ const inputInfo = (tab: vscode.Tab) => {
 
 const kindOf = (tab: vscode.Tab): Holds | undefined => holdsOfTab(inputInfo(tab));
 
-// The grid's reading order: VS Code numbers the groups' view columns that way.
-const real = () => [...vscode.window.tabGroups.all].sort((a, b) => a.viewColumn - b.viewColumn);
+// The main window's group count, while only the main window's groups are wanted (see useMainWindow); undefined means
+// every group counts. It is the main window's own count, not the other windows': a floating window that closes during a
+// restore then changes nothing here, where a cached count of the others would drop a main group from the list.
+let mainCount: number | undefined;
+
+// The core bridge's count of the main window's groups; a test stands in for it, as stock VS Code has no bridge.
+let mainGroupCount: () => Thenable<unknown> = () => vscode.commands.executeCommand('_towelwise.layout.mainGroupCount');
+// The bridge's answer if it is a count that makes sense, otherwise undefined (no bridge, or something unusable).
+async function readMainCount(): Promise<number | undefined> {
+  try {
+    const count = await mainGroupCount();
+    return typeof count === 'number' && Number.isInteger(count) && count > 0 ? count : undefined;
+  } catch {
+    return undefined;
+  }
+}
+export function setMainGroupCount(read: () => Thenable<unknown>): () => void {
+  const before = mainGroupCount;
+  mainGroupCount = read;
+  return () => {
+    mainGroupCount = before;
+  };
+}
+
+// The grid's reading order: VS Code numbers the groups' view columns that way, the main window's first and then
+// those of other editor windows, so the first mainCount groups are the main window's.
+const everyGroup = () => [...vscode.window.tabGroups.all].sort((a, b) => a.viewColumn - b.viewColumn);
+const real = () => {
+  const all = everyGroup();
+  return mainCount === undefined || mainCount > all.length ? all : all.slice(0, mainCount);
+};
 
 // The groups handed out are our own tokens, one per group in reading order, because VS Code 1.90 gives new group
 // objects after every change (newer versions keep them), so a group cannot be held by the object the API returns. A
@@ -32,12 +61,24 @@ const groupOf = (handle: object): vscode.TabGroup => {
   return group;
 };
 
-// A tab that opened alone in a new group has put a group into the list at that position.
-function noteOpened(tab: vscode.Tab): void {
-  const all = real();
-  if (registry.length === 0 || all.length !== registry.length + 1) return;
+// A tab that opened alone in a new group has put a group into the list at that position. With only the main window's
+// groups wanted, whether a group appeared is read from the main window's own count, which a floating window opening or
+// closing at the same moment cannot change; the total of all windows cannot tell the two apart. Otherwise every group
+// counts, and a total one larger than the list is the sign.
+async function noteOpened(tab: vscode.Tab): Promise<void> {
+  if (registry.length === 0) return;
+  const all = everyGroup();
   const at = all.findIndex((g) => g.tabs.includes(tab));
-  if (at >= 0 && all[at].tabs.length === 1) registry.splice(at, 0, {});
+  if (at < 0 || all[at].tabs.length !== 1) return;
+  if (mainCount === undefined) {
+    if (all.length === registry.length + 1) registry.splice(at, 0, {});
+    return;
+  }
+  const fresh = await readMainCount();
+  if (fresh === mainCount + 1) {
+    registry.splice(at, 0, {});
+    mainCount = fresh;
+  }
 }
 
 const run = (command: string, ...args: unknown[]) => vscode.commands.executeCommand(command, ...args);
@@ -88,6 +129,14 @@ async function putBack(): Promise<void> {
 /** The editor area of the window this extension runs in, through the tab-groups API and VS Code's own editor commands. */
 export const liveEditors: Editors = {
   groups: () => handles(),
+  async useMainWindow() {
+    // No bridge: every group counts, as before.
+    const main = await readMainCount();
+    mainCount = main !== undefined && main <= vscode.window.tabGroups.all.length ? main : undefined;
+  },
+  useAllWindows: () => {
+    mainCount = undefined;
+  },
   tabs: (group) => [...groupOf(group).tabs],
   kind: (tab) => kindOf(tab as vscode.Tab),
   focus: (group) => focusGroup(group),
@@ -107,6 +156,7 @@ export const liveEditors: Editors = {
     const at = registry.indexOf(group);
     await vscode.window.tabGroups.close(groupOf(group));
     registry.splice(at, 1);
+    if (mainCount !== undefined) mainCount--;
   },
   label: (tab) => (tab as vscode.Tab).label,
   openTerminal: async (group, open) => {
@@ -146,8 +196,11 @@ export const liveEditors: Editors = {
         if (!tab) return;
         clearTimeout(timer);
         watch.dispose();
-        noteOpened(tab);
-        resolve(tab);
+        // The list is made right before anyone is told the tab is there.
+        noteOpened(tab).then(
+          () => resolve(tab),
+          () => resolve(tab),
+        );
       });
     }),
 };

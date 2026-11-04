@@ -3,15 +3,22 @@ new file mode 100644
 index 0000000..0eea66b
 --- /dev/null
 +++ b/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,116 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Towelwise AI: a bridge that lets the built-in Towelwise extension read and set the sizes of the side bars
-+ *  and the panel, and move a view container between the side bars and the panel. It holds no feature logic: it
-+ *  reports the layout service's state, sets one size, and says where a container lives or moves it.
++ *  and the panel, move a view container between the side bars and the panel, and work on the main window's editor
++ *  groups when other editor windows are open. It holds no feature logic: it reports the layout service's state, sets
++ *  one size, says where a container lives or moves it, counts the main window's editor groups, and brings the main
++ *  window to the front.
 + *  The leading underscore keeps the commands out of the Command Palette; it is not an access boundary.
 + *--------------------------------------------------------------------------------------------*/
 +
++import { timeout } from '../../../../base/common/async.js';
++import { mainWindow } from '../../../../base/browser/window.js';
 +import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
++import { FocusMode } from '../../../../platform/native/common/native.js';
++import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
++import { IHostService } from '../../../services/host/browser/host.js';
 +import { IPaneCompositePartService } from '../../../services/panecomposite/browser/panecomposite.js';
 +import { IViewDescriptorService, ViewContainerLocation, ViewContainerLocationToString } from '../../../common/views.js';
 +import { IWorkbenchLayoutService, Parts, SINGLE_WINDOW_PARTS, isHorizontal, positionToString } from '../../../services/layout/browser/layoutService.js';
@@ -90,6 +97,28 @@ index 0000000..0eea66b
 +	}
 +	views.moveViewContainerToLocation(container, target, undefined, 'towelwise');
 +	return views.getViewContainerLocation(container) === target;
++});
++
++// The main window's editor group count. Groups are numbered across windows main window first, so the main window's
++// groups are view columns 1 to this count.
++CommandsRegistry.registerCommand('_towelwise.layout.mainGroupCount', accessor => accessor.get(IEditorGroupsService).mainPart.count);
++
++// Brings the main window to the front and focuses its active editor group, so the commands that act on the active
++// editor window (setting the editor grid, focusing groups, moving tabs) act on the main window. True once the main
++// window's editor part is the active one; false if it does not become active within about a second.
++CommandsRegistry.registerCommand('_towelwise.layout.focusMain', async accessor => {
++	const groups = accessor.get(IEditorGroupsService);
++	const host = accessor.get(IHostService);
++	const isMain = () => groups.getPart(groups.activeGroup) === groups.mainPart;
++	if (isMain()) {
++		return true;
++	}
++	await host.focus(mainWindow, { mode: FocusMode.Force });
++	groups.mainPart.activeGroup.focus();
++	for (let i = 0; i < 20 && !isMain(); i++) {
++		await timeout(50);
++	}
++	return isMain();
 +});
 diff --git a/src/vs/workbench/workbench.common.main.ts b/src/vs/workbench/workbench.common.main.ts
 index dcaa486..dcbd623 100644

@@ -25,8 +25,17 @@ export interface Mover {
  * host hands out; a group handle stays valid while its group exists, even when other groups open and close around it.
  */
 export interface Editors {
-  /** The groups in the grid's reading order: left to right, top to bottom within a column. */
+  /**
+   * The groups in the grid's reading order: left to right, top to bottom within a column. Between useMainWindow and
+   * useAllWindows, only the main window's; otherwise every window's.
+   */
   groups(): object[];
+  /**
+   * Reads how many groups are in other editor windows (the Choose Layout page's own, a floating file's), so groups()
+   * leaves them out. Read again after anything that may open or close another window.
+   */
+  useMainWindow(): PromiseLike<unknown>;
+  useAllWindows(): void;
   tabs(group: object): object[];
   /** What a tab is, if it is an agent or a terminal; undefined for anything else. */
   kind(tab: object): Holds | undefined;
@@ -54,6 +63,11 @@ export interface MyLayoutHost {
   bridge: Bridge & Mover;
   grid?: { apply(layout: Layout): PromiseLike<unknown> };
   editors?: Editors;
+  /**
+   * Brings the main window to the front, so the commands that act on the active editor window act on it: true once it
+   * is active, false if it could not be. Left out where the core bridge is not available.
+   */
+  focusMain?(): PromiseLike<boolean | undefined>;
   /** How a cell's terminal opens on this machine, with a problem line for each piece that falls back. */
   planTerminal(terminal: CellTerminal): PromiseLike<{ open: TerminalOpen; problems: string[] }>;
   // workbench.sideBar.location: which side the primary side bar is on, so "left" always means the left of the screen.
@@ -183,13 +197,26 @@ async function fillAgent(host: MyLayoutHost, editors: Editors, holds: Exclude<Ho
 async function placeColumns(host: MyLayoutHost, grid: SavedGrid): Promise<string[]> {
   const { editors } = host;
   if (!host.grid || !editors) return ['the editor grid could not be set: this window cannot read or set it'];
+  // Setting the grid, focusing groups and moving tabs act on whichever editor window is active.
+  if (host.focusMain && (await host.focusMain()) === false) {
+    return ['the main window could not be brought to the front, so the editor grid was left alone; click the main window and run Restore Layout again'];
+  }
   try {
-    await host.grid.apply(toLayout(grid));
+    return await placeInMainWindow(host, editors, host.grid, grid);
+  } finally {
+    editors.useAllWindows();
+  }
+}
+
+async function placeInMainWindow(host: MyLayoutHost, editors: Editors, gridHost: NonNullable<MyLayoutHost['grid']>, grid: SavedGrid): Promise<string[]> {
+  try {
+    await gridHost.apply(toLayout(grid));
     host.log('layout: editor grid shape and proportions applied');
   } catch (e) {
     return [`the editor grid could not be set (${errorText(e)})`];
   }
   const wanted = cellsInOrder(grid);
+  await editors.useMainWindow();
   const cells = editors.groups();
   if (cells.length !== wanted.length) {
     return [`the editor grid has ${cells.length} groups after it was set, not ${wanted.length}, so nothing was placed in its columns`];
@@ -202,6 +229,7 @@ async function placeColumns(host: MyLayoutHost, grid: SavedGrid): Promise<string
     for (const [i, { holds, terminal }] of wanted.entries()) {
       if (!holds) continue;
       try {
+        await editors.useMainWindow();
         const found = await fillCell(host, editors, holds, terminal, cells[i]);
         problems.push(...found);
         if (found.length === 0) host.log(`layout: ${holdsLabel(holds, terminal)} is in cell ${i + 1}`);
@@ -209,6 +237,7 @@ async function placeColumns(host: MyLayoutHost, grid: SavedGrid): Promise<string
         problems.push(`${holdsLabel(holds, terminal)}: could not be placed in its column (${errorText(e)})`);
       }
     }
+    await editors.useMainWindow();
     for (const group of editors.groups()) {
       if (cells.includes(group) || editors.tabs(group).length > 0) continue;
       try {
@@ -224,6 +253,7 @@ async function placeColumns(host: MyLayoutHost, grid: SavedGrid): Promise<string
     problems.push(`placing in the columns failed (${errorText(e)})`);
   }
   // Still possible if the setting could not be held off (a project overrides it): reported, and a second run converges.
+  await editors.useMainWindow();
   if (editors.groups().length !== wanted.length) {
     problems.push('a column closed while tabs were moved, so the grid changed shape; run Restore Layout again');
   }
@@ -310,6 +340,14 @@ const isFolder = (p: string) => fs.statSync(p, { throwIfNoEntry: false })?.isDir
 
 export function liveHost(storageDir: string, log: (line: string) => void, editors?: Editors): MyLayoutHost {
   return {
+    focusMain: async () => {
+      try {
+        return (await vscode.commands.executeCommand<unknown>('_towelwise.layout.focusMain')) === true;
+      } catch {
+        // No bridge (stock VS Code): the editor commands act on whichever window is active, as they always have.
+        return undefined;
+      }
+    },
     planTerminal: async (terminal) => {
       machine ??= detectMachine();
       const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
