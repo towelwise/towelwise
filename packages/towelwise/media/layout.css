@@ -204,6 +204,19 @@ button.small {
   min-width: 0;
 }
 
+/* A dropdown's closed face and its open list both use the editor's dropdown colours, so the list is
+   readable in light and dark themes (the default list is the system's white with the theme's text). */
+select {
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border-color: var(--vscode-dropdown-border, transparent);
+}
+
+select option {
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-listBackground, var(--vscode-dropdown-background));
+}
+
 .cell .tools,
 .col .tools {
   display: flex;

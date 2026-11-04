@@ -48,6 +48,13 @@ export function openLayoutPage(context: vscode.ExtensionContext, log: (line: str
     title: 'Choose Layout',
   });
 
+  // The page opens as a tab in the active group, then moves to its own window so it does not sit among
+  // (or split) the editor groups the layout is about. If the move fails, the page stays where it is.
+  void Promise.resolve(vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow')).then(
+    undefined,
+    (e: unknown) => log(`Choose Layout could not move to its own window: ${e instanceof Error ? e.message : String(e)}`),
+  );
+
   // A Save result is shown until the person changes something; any other update clears it.
   const send = (extra: { result?: SaveResult } = {}) =>
     panel.webview.postMessage({ type: 'state', ...draft.view(), clearResult: !extra.result, ...extra });
