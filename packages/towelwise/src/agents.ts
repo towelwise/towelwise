@@ -13,6 +13,9 @@ export interface AgentInfo {
   containers: readonly string[];
   // The agent's own command that shows its side view, wherever that view now lives.
   openSidebar: string;
+  // The command that opens the agent as an editor tab, and whether that tab lands in the focused group (Codex does;
+  // Claude Code adds a group of its own, so its tab has to be moved).
+  editor: { command: string; inFocusedGroup: boolean };
 }
 
 export const AGENTS: Record<AgentId, AgentInfo> = {
@@ -20,11 +23,13 @@ export const AGENTS: Record<AgentId, AgentInfo> = {
     label: 'Claude Code',
     containers: ['claude-sidebar-secondary', 'claude-sidebar'],
     openSidebar: 'claude-vscode.sidebar.open',
+    editor: { command: 'claude-vscode.editor.open', inFocusedGroup: false },
   },
   codex: {
     label: 'Codex',
     containers: ['codexSecondaryViewContainer', 'codexViewContainer'],
     openSidebar: 'chatgpt.openSidebar',
+    editor: { command: 'chatgpt.newCodexPanel', inFocusedGroup: true },
   },
 };
 
@@ -32,6 +37,24 @@ export const AGENTS: Record<AgentId, AgentInfo> = {
 export const coreContainerId = (manifestId: string) => `workbench.view.extension.${manifestId}`;
 
 export const AGENT_IDS = Object.keys(AGENTS) as AgentId[];
+
+/** What an editor-grid cell can hold: an agent or a terminal. */
+export type Holds = AgentId | 'terminal';
+export const HOLDS: readonly Holds[] = [...AGENT_IDS, 'terminal'];
+
+/** A tab's input, reduced to what tells the agents apart (the view type is what the agent registers). */
+export interface TabInputInfo {
+  type: 'webview' | 'custom' | 'terminal' | 'other';
+  viewType?: string;
+}
+
+/** What a tab is: Claude Code is a webview, Codex a custom editor, a terminal a terminal; anything else is not ours. */
+export function holdsOfTab(input: TabInputInfo): Holds | undefined {
+  if (input.type === 'terminal') return 'terminal';
+  if (input.type === 'webview' && /claudeVSCodePanel$/.test(input.viewType ?? '')) return 'claudeCode';
+  if (input.type === 'custom' && input.viewType === 'chatgpt.conversationEditor') return 'codex';
+  return undefined;
+}
 
 export type AgentPlaces = Partial<Record<AgentId, Place>>;
 

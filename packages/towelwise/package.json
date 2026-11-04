@@ -198,6 +198,17 @@
             "scope": "application",
             "markdownDescription": "Where each agent lives: `left` or `right` side bar, the bottom `panel`, or a `column` of the editor grid (not available yet). When this is set, **Towelwise: Restore Layout** moves each agent there and ignores `towelwise.layout.containers` and `towelwise.layout.commands`."
           },
+          "towelwise.layout.grid": {
+            "type": "object",
+            "default": {},
+            "properties": {
+              "orientation": { "enum": [0, 1] },
+              "groups": { "type": "array", "items": { "type": "object" } }
+            },
+            "additionalProperties": false,
+            "scope": "application",
+            "markdownDescription": "The editor area's grid for your layout: `orientation` (0 for columns) and `groups`, each with a `size` as a proportion of its parent, optional nested `groups`, and what it `holds` (`claudeCode`, `codex` or `terminal`). Every agent placed in a `column` in `towelwise.layout.agents` must be in exactly one cell. **Towelwise: Restore Layout** sets the grid, then puts each agent and terminal in its cell; it never closes a tab."
+          },
           "towelwise.layout.sizes": {
             "type": "object",
             "default": {},

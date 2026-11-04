@@ -1,5 +1,6 @@
 // The editor area's grid of groups: columns and rows with proportions. Pure logic only: reading and applying the
 // live grid goes through VS Code's own vscode.getEditorLayout and vscode.setEditorLayout.
+import { HOLDS, Holds } from './agents';
 
 /** A group or a split of groups, as vscode.getEditorLayout returns it and vscode.setEditorLayout accepts it. */
 export interface LayoutNode {
@@ -13,10 +14,14 @@ export interface Layout {
   groups: LayoutNode[];
 }
 
-/** The saved form: sizes are proportions of the parent, and a leaf may carry a label for the picker only. */
+/**
+ * The saved form: sizes are proportions of the parent. A leaf may carry a label for the picker only, and (in a saved
+ * layout) what it holds.
+ */
 export interface SavedNode {
   size: number;
   label?: string;
+  holds?: Holds;
   groups?: SavedNode[];
 }
 
@@ -37,8 +42,12 @@ function parseNodes<T extends LayoutNode | SavedNode>(raw: unknown, keepLabels: 
       const children = parseNodes<SavedNode>(item.groups, keepLabels);
       if (!children) return undefined;
       node.groups = children;
-    } else if (keepLabels && typeof item.label === 'string' && item.label !== '') {
-      node.label = item.label;
+    } else if (keepLabels) {
+      if (typeof item.label === 'string' && item.label !== '') node.label = item.label;
+      if (item.holds !== undefined) {
+        if (!HOLDS.includes(item.holds as Holds)) return undefined;
+        node.holds = item.holds as Holds;
+      }
     }
     nodes.push(node as T);
   }

@@ -1,6 +1,9 @@
 import * as assert from 'node:assert';
 import { coreContainerId, parseAgents } from '../agents';
-import { applyLayout, locationFor, MyLayoutHost } from '../myLayout';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { applyLayout, applyLayoutLocked, layoutInUse, locationFor, MyLayoutHost } from '../myLayout';
 import { LayoutState } from '../sizes';
 
 const noLog = () => undefined;
@@ -106,7 +109,7 @@ suite('agents and my layout', () => {
       const w = windowWith({ [CODEX]: 'auxiliarybar' });
       const out = await applyLayout(w.host, { agents: { codex: 'left' } });
       assert.deepStrictEqual(w.calls, [`move ${CODEX} sidebar`, 'run chatgpt.openSidebar']);
-      assert.deepStrictEqual(out, { placed: ['codex'], problems: [] });
+      assert.deepStrictEqual(out, { placed: ['codex'], problems: [], openAsTab: [] });
     });
 
     test('asks the window about the ids core really uses: the manifest id with a prefix', async () => {
@@ -172,7 +175,7 @@ suite('agents and my layout', () => {
       assert.strictEqual(out.problems.length, 1);
     });
 
-    test('an agent placed in a column is left for the grid slice and reported', async () => {
+    test('an agent placed in a column with no grid saved is reported, and nothing is run', async () => {
       const w = windowWith({ [CODEX]: 'auxiliarybar' });
       const out = await applyLayout(w.host, { agents: { codex: 'column' } });
       assert.deepStrictEqual(w.calls, []);
@@ -196,7 +199,7 @@ suite('agents and my layout', () => {
       const w = windowWith({ [CODEX]: 'auxiliarybar' }, { hyperspace: true });
       const out = await applyLayout(w.host, { agents: { codex: 'left' }, sizes: { sidebar: 0.4 } });
       assert.deepStrictEqual(w.calls, []);
-      assert.deepStrictEqual(out, { placed: [], problems: [], refused: 'hyperspace' });
+      assert.deepStrictEqual(out, { placed: [], problems: [], openAsTab: [], refused: 'hyperspace' });
     });
 
     test('running it twice leaves the same result', async () => {
@@ -226,6 +229,38 @@ suite('agents and my layout', () => {
       assert.deepStrictEqual(w.calls, []);
       assert.strictEqual(out.problems.length, 1);
       assert.deepStrictEqual(w.told, []);
+    });
+  });
+
+  suite('one restore at a time', () => {
+    test('a restore that starts while another is running is told it is busy and does nothing; one after it works', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'towelwise-'));
+      const core = coreContainerId('codexSecondaryViewContainer');
+      const first = windowWith({ [core]: 'auxiliarybar' });
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const running = applyLayoutLocked(dir, { ...first.host, run: async () => gate }, { agents: { codex: 'left' } });
+      const second = windowWith({ [core]: 'auxiliarybar' });
+      assert.strictEqual(await applyLayoutLocked(dir, second.host, { agents: { codex: 'left' } }), 'busy');
+      assert.deepStrictEqual(second.calls, []);
+      release();
+      assert.notStrictEqual(await running, 'busy');
+      const third = windowWith({ [core]: 'auxiliarybar' });
+      assert.notStrictEqual(await applyLayoutLocked(dir, third.host, { agents: { codex: 'left' } }), 'busy');
+      assert.ok(third.calls.length > 0);
+    });
+  });
+
+  suite('layoutInUse', () => {
+    test('a layout is in use when agents, a grid or sizes are saved, so a terminal-only grid or sizes alone are applied', () => {
+      assert.strictEqual(layoutInUse({ agents: { codex: 'left' } }), true);
+      assert.strictEqual(layoutInUse({ grid: { orientation: 0, groups: [{ size: 1, holds: 'terminal' }] } }), true);
+      assert.strictEqual(layoutInUse({ sizes: { sidebar: 0.2 } }), true);
+    });
+
+    test('nothing saved leaves the earlier container list in charge', () => {
+      assert.strictEqual(layoutInUse({}), false);
+      assert.strictEqual(layoutInUse({ sizes: {} }), false);
     });
   });
 });

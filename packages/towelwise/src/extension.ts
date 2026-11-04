@@ -1,8 +1,11 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { isActive, restore, setLog, toggle } from './hyperspace';
-import { applyOnStartup, chooseLayout, liveVsCode, restoreLayout } from './layout';
-import { applyLayout, liveHost, readLayout } from './myLayout';
+import { applyOnStartup, liveVsCode, restoreLayout } from './layout';
+import { openLayoutPage } from './layoutPanel';
+import { AGENTS } from './agents';
+import { liveEditors } from './liveEditors';
+import { applyLayoutLocked, closeAgentTabs, liveHost, readLayout } from './myLayout';
 import { logMenuProblems } from './menuEntries';
 import { openPicker } from './pickerPanel';
 import { available, detectMachine, launch, SHELL_KEYS, ShellKey, startDir } from './shells';
@@ -70,16 +73,28 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.commands.registerCommand('towelwise.hyperspace.edit', () => openPicker(context, storageDir)),
-    vscode.commands.registerCommand('towelwise.layout.choose', () => chooseLayout().catch(showError)),
+    vscode.commands.registerCommand('towelwise.layout.choose', () => openLayoutPage(context, log)),
     vscode.commands.registerCommand('towelwise.layout.restore', async () => {
       try {
         const mine = readLayout(log);
         if (mine) {
-          const outcome = await applyLayout(liveHost(storageDir, log), mine);
+          const outcome = await applyLayoutLocked(storageDir, liveHost(storageDir, log, liveEditors), mine);
+          if (outcome === 'busy') {
+            void vscode.window.showInformationMessage('Towelwise: another restore or jump is running right now. Try again in a moment.');
+            return;
+          }
           if (outcome.refused) {
             void vscode.window.showInformationMessage('Towelwise: leave hyperspace first, then restore your layout.');
           } else if (outcome.problems.length > 0) {
             void vscode.window.showInformationMessage(`Towelwise: your layout is applied, except: ${outcome.problems.join('; ')}.`);
+          }
+          // Nothing is closed for the person: they are told, and may close the second copy with one press.
+          if (outcome.openAsTab.length > 0) {
+            const names = outcome.openAsTab.map((id) => AGENTS[id].label).join(' and ');
+            void vscode.window.showInformationMessage(`Towelwise: ${names} also open${outcome.openAsTab.length > 1 ? '' : 's'} as an editor tab.`, 'Close it').then(async (choice) => {
+              if (choice !== 'Close it') return;
+              for (const id of outcome.openAsTab) await closeAgentTabs(liveEditors, id);
+            });
           }
           return;
         }

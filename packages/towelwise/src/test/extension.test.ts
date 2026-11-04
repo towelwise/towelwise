@@ -32,6 +32,7 @@ suite('towelwise.towelwise', () => {
         'towelwise.layout.applyOnStartup',
         'towelwise.layout.commands',
         'towelwise.layout.containers',
+        'towelwise.layout.grid',
         'towelwise.layout.sizes',
       ],
     );

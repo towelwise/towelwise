@@ -409,10 +409,12 @@ export interface PageParts {
   nonce: string;
   scriptUri: string;
   styleUri: string;
+  // The page's title; the hyperspace page's when not given.
+  title?: string;
 }
 
 // default-src 'none' means no network, no frames and no inline script: only the two local files load.
-export function pageHtml({ cspSource, nonce, scriptUri, styleUri }: PageParts): string {
+export function pageHtml({ cspSource, nonce, scriptUri, styleUri, title = 'Edit Hyperspace Layout' }: PageParts): string {
   const csp = `default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}';`;
   return `<!DOCTYPE html>
 <html lang="en">
@@ -421,7 +423,7 @@ export function pageHtml({ cspSource, nonce, scriptUri, styleUri }: PageParts): 
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${styleUri}">
-<title>Edit Hyperspace Layout</title>
+<title>${title}</title>
 </head>
 <body>
 <div id="app"></div>

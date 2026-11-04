@@ -1,0 +1,153 @@
+import * as assert from 'node:assert';
+import * as path from 'node:path';
+import * as vscode from 'vscode';
+import { liveEditors } from '../liveEditors';
+
+// These run against the real editor area of the test window: the adapter is what the built app uses.
+const settings = () => vscode.workspace.getConfiguration('workbench.editor');
+const globalValue = () => settings().inspect<boolean>('closeEmptyGroups')?.globalValue;
+const setGlobal = (value: boolean | undefined) => settings().update('closeEmptyGroups', value, vscode.ConfigurationTarget.Global);
+
+const gate = () => {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => (release = resolve));
+  return { promise, release };
+};
+
+async function until(condition: () => boolean, what: string): Promise<void> {
+  for (let i = 0; i < 100; i++) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.fail(`timed out waiting for ${what}`);
+}
+
+const tenColumns = { orientation: 0, groups: Array.from({ length: 10 }, () => ({ size: 0.1 })) };
+
+// Files on disk, so closing them later asks nothing.
+const open = async (file: string, viewColumn: number) =>
+  vscode.window.showTextDocument(await vscode.workspace.openTextDocument(path.join(__dirname, file)), { viewColumn, preview: false });
+
+suite('live editors', () => {
+  let original: boolean | undefined;
+  setup(() => {
+    original = globalValue();
+  });
+  teardown(async () => {
+    await setGlobal(original);
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 1 }] });
+  });
+
+  suite('holding empty groups open', () => {
+    test("overlapping holds share one: the first to finish does not end the second's, and the last puts the setting back exactly", async () => {
+      await setGlobal(undefined);
+      const a = gate();
+      const b = gate();
+      const first = liveEditors.keepEmptyGroups(() => a.promise);
+      await until(() => settings().get('closeEmptyGroups') === false, 'the first hold');
+      const second = liveEditors.keepEmptyGroups(() => b.promise);
+      a.release();
+      await first;
+      assert.strictEqual(settings().get('closeEmptyGroups'), false, 'the second run lost its hold');
+      b.release();
+      await second;
+      assert.strictEqual(globalValue(), undefined, 'the user had no value, so none is left');
+      assert.strictEqual(settings().get('closeEmptyGroups'), true);
+    });
+
+    test('a value the user had set is put back as it was', async () => {
+      await setGlobal(true);
+      await liveEditors.keepEmptyGroups(async () => {
+        assert.strictEqual(settings().get('closeEmptyGroups'), false);
+      });
+      assert.strictEqual(globalValue(), true);
+    });
+
+    test('the setting is put back when the work fails, and the failure still reaches the caller', async () => {
+      await setGlobal(undefined);
+      await assert.rejects(() => liveEditors.keepEmptyGroups(async () => Promise.reject(new Error('boom'))), /boom/);
+      assert.strictEqual(globalValue(), undefined);
+    });
+
+    test('a user who already keeps empty groups is left alone', async () => {
+      await setGlobal(false);
+      await liveEditors.keepEmptyGroups(async () => undefined);
+      assert.strictEqual(globalValue(), false);
+    });
+  });
+
+  suite('holding a group across a change', () => {
+    test('a group an agent opens for itself is tracked, so the groups held before stay the same groups', async () => {
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.4 }, { size: 0.3 }, { size: 0.3 }] });
+      await open('liveEditors.test.js', 1);
+      await open('columns.test.js', 3);
+      const before = liveEditors.groups();
+      assert.strictEqual(before.length, 3);
+      await liveEditors.focus(before[0]);
+
+      // A new group appears between the first and the second, with one tab in it that has Claude Code's view type: the
+      // shift Claude Code's own group causes when it opens.
+      const opened = liveEditors.waitForTab('claudeCode', 10000);
+      await vscode.commands.executeCommand('workbench.action.newGroupRight');
+      const panel = vscode.window.createWebviewPanel('claudeVSCodePanel', 'Claude Code (stand-in)', { viewColumn: vscode.ViewColumn.Two }, {});
+      try {
+        assert.ok(await opened, 'the stand-in tab never opened');
+        const after = liveEditors.groups();
+        assert.strictEqual(after.length, 4);
+        assert.deepStrictEqual([after[0], after[2], after[3]], [before[0], before[1], before[2]], 'the groups held before are not the same groups after');
+        assert.strictEqual(liveEditors.tabs(before[0]).length, 1);
+        assert.strictEqual(liveEditors.tabs(before[1]).length, 0);
+        assert.strictEqual(liveEditors.tabs(before[2]).length, 1);
+        assert.deepStrictEqual(liveEditors.tabs(after[1]).map((t) => liveEditors.kind(t)), ['claudeCode']);
+
+        // And it can be moved into a held group, and the group it left closed by its handle, leaving the others.
+        await liveEditors.keepEmptyGroups(async () => {
+          await liveEditors.moveTab(liveEditors.tabs(after[1])[0], before[1]);
+          await liveEditors.closeGroup(after[1]);
+        });
+        const last = liveEditors.groups();
+        assert.strictEqual(last.length, 3);
+        assert.deepStrictEqual(last, [before[0], before[1], before[2]]);
+        assert.deepStrictEqual(liveEditors.tabs(before[1]).map((t) => liveEditors.kind(t)), ['claudeCode']);
+      } finally {
+        panel.dispose();
+      }
+    });
+  });
+
+  suite('groups past the eighth', () => {
+    test('can focus the tenth group and move a tab out of it, and the groups stay', async () => {
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await vscode.commands.executeCommand('vscode.setEditorLayout', tenColumns);
+      await open('liveEditors.test.js', 1);
+      await open('columns.test.js', 10);
+      const groups = liveEditors.groups();
+      assert.strictEqual(groups.length, 10);
+
+      await liveEditors.focus(groups[9]);
+      assert.strictEqual(vscode.window.tabGroups.activeTabGroup.viewColumn, vscode.window.tabGroups.all[9].viewColumn);
+
+      const tab = liveEditors.tabs(groups[9])[0];
+      await liveEditors.keepEmptyGroups(async () => {
+        await liveEditors.moveTab(tab, groups[0]);
+      });
+      assert.strictEqual(liveEditors.tabs(groups[0]).length, 2);
+      assert.strictEqual(liveEditors.tabs(groups[9]).length, 0);
+      assert.strictEqual(liveEditors.groups().length, 10, 'a cell closed');
+    });
+
+    test('can move a tab into the tenth group', async () => {
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await vscode.commands.executeCommand('vscode.setEditorLayout', tenColumns);
+      await open('columns.test.js', 1);
+      const groups = liveEditors.groups();
+      await liveEditors.keepEmptyGroups(async () => {
+        await liveEditors.moveTab(liveEditors.tabs(groups[0])[0], groups[9]);
+      });
+      assert.strictEqual(liveEditors.tabs(groups[9]).length, 1);
+      assert.strictEqual(liveEditors.groups().length, 10);
+    });
+  });
+});
