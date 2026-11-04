@@ -103,14 +103,46 @@ function cellNode(grid, column, columnData, row, rowData) {
   tools.append(button('Split', () => send({ type: 'addRow', column, row }), 'small', `split-${column}-${row}`));
   if (columnData.rows.length > 1) tools.append(button('Remove', () => send({ type: 'removeRow', column, row }), 'small', `rmrow-${column}-${row}`));
   cell.append(select);
-  if (rowData.terminal) cell.append(terminalFields(column, row, rowData.terminal));
+  if (rowData.terminal) cell.append(el('div', 'summary', terminalSummary(rowData.terminal)));
   cell.append(tools);
   return cell;
 }
 
+// A cell is too small for the terminal's fields, so it shows a one-line summary; the fields are under the grid.
+function terminalSummary(terminal) {
+  const shell = terminal.shells.find((s) => s.value === terminal.shell);
+  const parts = [terminal.name || terminal.placeholder];
+  if (shell && shell.label !== parts[0]) parts.push(shell.label);
+  if (terminal.folder) parts.push(terminal.folder);
+  if (terminal.command) parts.push(terminal.command);
+  return parts.join(' · ');
+}
+
+// One row of fields for each terminal cell, named by where it is in the grid.
+function terminalsBlock(grid) {
+  const cells = [];
+  grid.columns.forEach((columnData, column) =>
+    columnData.rows.forEach((rowData, row) => {
+      if (rowData.terminal) cells.push({ column, row, terminal: rowData.terminal, rows: columnData.rows.length });
+    }),
+  );
+  if (cells.length === 0) return undefined;
+  const block = el('div', 'terminals');
+  block.append(el('h3', '', 'Terminal cells'), el('p', 'hint', 'Leave a field empty to use the default shown in it.'));
+  for (const { column, row, terminal, rows } of cells) {
+    const where = rows > 1 ? `Column ${column + 1}, row ${row + 1}` : `Column ${column + 1}`;
+    const card = el('div', 'terminal');
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-label', where);
+    card.append(el('div', 'where', where), terminalFields(column, row, terminal));
+    block.append(card);
+  }
+  return block;
+}
+
 // Which terminal a terminal cell opens. Any change sends all four fields, as the person sees them now.
 function terminalFields(column, row, terminal) {
-  const box = el('div', 'terminal');
+  const box = el('div', 'fields');
   const key = (field) => `terminal-${field}-${column}-${row}`;
   const shell = el('select');
   shell.dataset.key = key('shell');
@@ -202,7 +234,10 @@ function gridSection(state) {
     columns,
     button('+ Column', () => send({ type: 'addColumn', side: 'right' }), 'edge', 'add-right'),
   );
-  section.append(wrap, button('Remove editor columns', () => send({ type: 'removeColumns' }), 'small', 'remove-columns'));
+  section.append(wrap);
+  const terminals = terminalsBlock(grid);
+  if (terminals) section.append(terminals);
+  section.append(button('Remove editor columns', () => send({ type: 'removeColumns' }), 'small', 'remove-columns'));
   return section;
 }
 

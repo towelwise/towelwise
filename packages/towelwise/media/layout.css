@@ -217,23 +217,51 @@ select option {
   background: var(--vscode-dropdown-listBackground, var(--vscode-dropdown-background));
 }
 
-/* Which terminal a terminal cell opens: a label above each field, scrolling if the cell is short. */
-.cell .terminal {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 0;
-  overflow-y: auto;
+/* A terminal cell's one-line summary; its fields are in the Terminal cells block under the grid. */
+.cell .summary {
+  font-size: 0.9em;
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.cell .terminal label {
+.terminals {
+  margin: 12px 0;
+}
+
+.terminals h3 {
+  margin: 0 0 4px;
+  font-size: 1em;
+}
+
+.terminals .terminal {
+  padding: 8px 10px;
+  margin: 6px 0;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+}
+
+.terminals .where {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* Shell, name, folder and command side by side, wrapping onto more lines in a narrow window. */
+.terminals .fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 12px;
+}
+
+.terminals .fields label {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 0.9em;
 }
 
-.cell .terminal input {
+.terminals .fields input,
+.terminals .fields select {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
