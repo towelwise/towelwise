@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { LayoutDraft, LayoutEnv, SaveResult, parseLayoutMessage } from './layoutDraft';
 import { liveEditors } from './liveEditors';
-import { readSaved } from './myLayout';
+import { withLock } from './lock';
+import { Editors, readSaved } from './myLayout';
 import { pageHtml } from './picker';
 import { parseLayoutState } from './sizes';
 
@@ -35,20 +36,41 @@ let restoring = false;
 export interface PageHost {
   createPanel(media: vscode.Uri): vscode.WebviewPanel;
   run(command: string): Thenable<unknown>;
-  keepEmptyGroups<T>(work: () => Promise<T>): Promise<T>;
+  /** Runs work with empty groups held open and no restore or jump running in any window; false if one was. */
+  holdEmptyGroups(work: () => Promise<void>): Promise<boolean>;
   wait(ms: number): Promise<void>;
 }
 
-const liveHost: PageHost = {
+/**
+ * The empty-groups hold is a global user setting, so it is only taken under the lock restore and hyperspace use:
+ * another window's restore cannot have the setting put back under it, and this hold cannot start in the middle of one.
+ */
+export function lockedHold(storageDir: string, editors: Pick<Editors, 'keepEmptyGroups'>): PageHost['holdEmptyGroups'] {
+  return async (work) => {
+    let ran = false;
+    await withLock<void>(
+      storageDir,
+      () =>
+        editors.keepEmptyGroups(async () => {
+          ran = true;
+          await work();
+        }),
+      undefined,
+    );
+    return ran;
+  };
+}
+
+const liveHostFor = (storageDir: string): PageHost => ({
   createPanel: (media) =>
     vscode.window.createWebviewPanel('towelwise.layout.choose', 'Choose Layout', vscode.ViewColumn.Active, {
       enableScripts: true,
       localResourceRoots: [media],
     }),
   run: (command) => vscode.commands.executeCommand(command),
-  keepEmptyGroups: (work) => liveEditors.keepEmptyGroups(work),
+  holdEmptyGroups: lockedHold(storageDir, liveEditors),
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-};
+});
 
 /** Closes the page if it is open (the tests use this to leave no window behind). */
 export function closeLayoutPage(): void {
@@ -60,7 +82,7 @@ export function openLayoutPage(
   context: vscode.ExtensionContext,
   log: (line: string) => void,
   kept?: LayoutDraft,
-  host: PageHost = liveHost,
+  host: PageHost = liveHostFor(context.globalStorageUri.fsPath),
 ): void {
   if (restoring) return;
   if (current) {
@@ -71,6 +93,7 @@ export function openLayoutPage(
   const media = vscode.Uri.joinPath(context.extensionUri, 'media');
   const panel = host.createPanel(media);
   current = { panel };
+  let closed = false;
   const draft = kept ?? new LayoutDraft(readSaved(log), liveEnv);
   const uri = (file: string) => panel.webview.asWebviewUri(vscode.Uri.joinPath(media, file)).toString();
   panel.webview.html = pageHtml({
@@ -84,11 +107,21 @@ export function openLayoutPage(
   // The page opens as a tab in the active group, then moves to its own window so it does not sit among
   // (or split) the editor groups the layout is about. If the move fails, the page stays where it is. The page
   // may be the only tab in an empty group, and VS Code closes a group when its last tab leaves, which would
-  // remove a column the person set up; empty groups are held open for the move.
+  // remove a column the person set up; empty groups are held open for the move. The hold can take a moment, and
+  // the command moves whichever editor is active when it runs, so the move is dropped if the page has closed
+  // meanwhile, and the page is made the active editor first. If a restore or jump is running elsewhere, the page
+  // stays where it opened rather than race it.
   void host
-    .keepEmptyGroups(async () => host.run('workbench.action.moveEditorToNewWindow'))
-    .then(undefined, (e: unknown) =>
-      log(`Choose Layout could not move to its own window: ${e instanceof Error ? e.message : String(e)}`),
+    .holdEmptyGroups(async () => {
+      if (closed) return;
+      panel.reveal(undefined, false);
+      await host.run('workbench.action.moveEditorToNewWindow');
+    })
+    .then(
+      (held) => {
+        if (!held) log('Choose Layout stayed in this window: a restore or jump is running.');
+      },
+      (e: unknown) => log(`Choose Layout could not move to its own window: ${e instanceof Error ? e.message : String(e)}`),
     );
 
   // A Save result is shown until the person changes something; any other update clears it.
@@ -174,6 +207,7 @@ export function openLayoutPage(
   );
   panel.onDidDispose(
     () => {
+      closed = true;
       if (current?.panel === panel) current = undefined;
     },
     undefined,

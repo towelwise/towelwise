@@ -1,9 +1,18 @@
 import * as assert from 'node:assert';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { PageHost, closeLayoutPage, openLayoutPage } from '../layoutPanel';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import { PageHost, closeLayoutPage, lockedHold, openLayoutPage } from '../layoutPanel';
+import { withLock } from '../lock';
 
-const context = { extensionUri: vscode.Uri.file(path.join(__dirname, '..', '..')), subscriptions: [] } as unknown as vscode.ExtensionContext;
+// The real lock files go in a folder of their own, not the extension's storage.
+const storage = fs.mkdtempSync(path.join(os.tmpdir(), 'towelwise-page-'));
+const context = {
+  extensionUri: vscode.Uri.file(path.join(__dirname, '..', '..')),
+  globalStorageUri: vscode.Uri.file(storage),
+  subscriptions: [],
+} as unknown as vscode.ExtensionContext;
 const log = () => undefined;
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -18,7 +27,7 @@ const gate = () => {
 };
 
 // A page that records what is sent to it and lets the test send what the page would send.
-function fakePanel() {
+function fakePanel(events: string[]) {
   const posted: Array<Record<string, unknown>> = [];
   const listeners: Array<() => void> = [];
   let handler: ((message: unknown) => unknown) | undefined;
@@ -38,7 +47,10 @@ function fakePanel() {
           return { dispose() {} };
         },
       },
-      reveal: () => void page.revealed++,
+      reveal: () => {
+        page.revealed++;
+        events.push('reveal');
+      },
       dispose: () => {
         if (page.disposed) return;
         page.disposed = true;
@@ -54,14 +66,16 @@ function fakePanel() {
 }
 
 // The window, with the three things the page waits on under the test's control.
-function fakeHost() {
+function fakeHost(options: { busy?: boolean; gatedHold?: boolean } = {}) {
   const pages: Array<ReturnType<typeof fakePanel>> = [];
   const events: string[] = [];
   const waits: Array<ReturnType<typeof gate>> = [];
   const restores: Array<ReturnType<typeof gate>> = [];
+  const holds: Array<ReturnType<typeof gate>> = [];
+  const logged: string[] = [];
   const host: PageHost = {
     createPanel: () => {
-      const page = fakePanel();
+      const page = fakePanel(events);
       pages.push(page);
       events.push('create');
       return page.panel as unknown as vscode.WebviewPanel;
@@ -75,10 +89,17 @@ function fakeHost() {
       }
       return undefined;
     },
-    keepEmptyGroups: async (work) => {
+    holdEmptyGroups: async (work) => {
+      if (options.busy) return false;
       events.push('hold');
       try {
-        return await work();
+        if (options.gatedHold) {
+          const g = gate();
+          holds.push(g);
+          await g.promise;
+        }
+        await work();
+        return true;
       } finally {
         events.push('release');
       }
@@ -89,10 +110,11 @@ function fakeHost() {
       await g.promise;
     },
   };
-  return { host, pages, events, waits, restores };
+  return { host, pages, events, waits, restores, holds, logged };
 }
 
 suite('layout page', () => {
+  suiteTeardown(() => fs.rmSync(storage, { recursive: true, force: true }));
   teardown(() => closeLayoutPage());
 
   suite('lifecycle, with a stand-in window', () => {
@@ -100,15 +122,47 @@ suite('layout page', () => {
       const w = fakeHost();
       openLayoutPage(context, log, undefined, w.host);
       await flush();
-      assert.deepStrictEqual(w.events, ['create', 'hold', 'run workbench.action.moveEditorToNewWindow', 'release']);
+      assert.deepStrictEqual(w.events, ['create', 'hold', 'reveal', 'run workbench.action.moveEditorToNewWindow', 'release']);
+    });
+
+    test('a page closed while the hold is pending is not moved, and no other editor is moved in its place', async () => {
+      const w = fakeHost({ gatedHold: true });
+      openLayoutPage(context, log, undefined, w.host);
+      await flush();
+      w.pages[0].panel.dispose();
+      w.holds[0].release();
+      await flush();
+      assert.deepStrictEqual(w.events, ['create', 'hold', 'release'], 'nothing was revealed or moved');
+    });
+
+    test('the page is made the active editor right before the move, whatever was active while the hold was pending', async () => {
+      const w = fakeHost({ gatedHold: true });
+      openLayoutPage(context, log, undefined, w.host);
+      await flush();
+      w.holds[0].release();
+      await flush();
+      const at = w.events.indexOf('run workbench.action.moveEditorToNewWindow');
+      assert.ok(at > 0 && w.events[at - 1] === 'reveal', `the page is revealed just before the move: ${w.events.join(', ')}`);
+    });
+
+    test('when a restore or jump is running elsewhere, the page stays where it opened and says so', async () => {
+      const w = fakeHost({ busy: true });
+      const lines: string[] = [];
+      openLayoutPage(context, (line) => lines.push(line), undefined, w.host);
+      await flush();
+      assert.deepStrictEqual(w.events, ['create']);
+      assert.strictEqual(lines.length, 1);
+      assert.match(lines[0], /stayed in this window/);
     });
 
     test('opening it again while it is open shows the same page', async () => {
       const w = fakeHost();
       openLayoutPage(context, log, undefined, w.host);
+      await flush();
+      const before = w.pages[0].revealed;
       openLayoutPage(context, log, undefined, w.host);
       assert.strictEqual(w.pages.length, 1);
-      assert.strictEqual(w.pages[0].revealed, 1);
+      assert.strictEqual(w.pages[0].revealed, before + 1);
     });
 
     test('Choose Layout during a restore opens nothing, and the page comes back with the unsaved draft', async () => {
@@ -147,9 +201,10 @@ suite('layout page', () => {
       await restoring;
       assert.strictEqual(w.pages.length, 2);
 
+      const before = w.pages[1].revealed;
       openLayoutPage(context, log, undefined, w.host);
       assert.strictEqual(w.pages.length, 2);
-      assert.strictEqual(w.pages[1].revealed, 1);
+      assert.strictEqual(w.pages[1].revealed, before + 1);
     });
 
     test('a page closed after the restore stays closed and the next Choose Layout starts from what is saved', async () => {
@@ -174,8 +229,54 @@ suite('layout page', () => {
   });
 });
 
+// The page's hold of the empty-groups setting is the same kind of writer as a restore's, and other windows
+// share the setting, so the two take the same cross-window lock. Another window is another process with its own
+// lock file, which the lock treats exactly as it treats a second holder here.
+suite('layout page hold and the cross-window lock', () => {
+  let dir: string;
+  setup(() => void (dir = fs.mkdtempSync(path.join(os.tmpdir(), 'towelwise-hold-'))));
+  teardown(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const editors = { keepEmptyGroups: async <T,>(work: () => Promise<T>) => work() };
+
+  test('while a restore holds the lock the page does not take its hold, and says it did not', async () => {
+    const restore = gate();
+    const restoring = withLock<string>(dir, async () => (await restore.promise, 'done'), 'busy');
+    let ran = false;
+    const held = await lockedHold(dir, editors)(async () => void (ran = true));
+    assert.strictEqual(held, false);
+    assert.strictEqual(ran, false);
+    restore.release();
+    await restoring;
+    assert.strictEqual(await lockedHold(dir, editors)(async () => void (ran = true)), true, 'free again once the restore ends');
+    assert.strictEqual(ran, true);
+  });
+
+  test('while the page holds, a restore in another window is told it is busy and changes nothing', async () => {
+    const inside = gate();
+    const release = gate();
+    const holding = lockedHold(dir, editors)(async () => {
+      inside.release();
+      await release.promise;
+    });
+    await inside.promise;
+    let restored = false;
+    const outcome = await withLock(dir, async () => void (restored = true), 'busy');
+    assert.strictEqual(outcome, 'busy');
+    assert.strictEqual(restored, false);
+    release.release();
+    assert.strictEqual(await holding, true);
+    assert.strictEqual(await withLock(dir, async () => 'ran', 'busy'), 'ran', 'the lock is released after the page holds');
+  });
+
+  test('the lock is released when the move fails, and the failure reaches the caller', async () => {
+    await assert.rejects(() => lockedHold(dir, editors)(async () => Promise.reject(new Error('boom'))), /boom/);
+    assert.strictEqual(await withLock(dir, async () => 'ran', 'busy'), 'ran');
+  });
+});
+
 // The real window: opening the page must not change the layout it is about.
 suite('layout page, in the real window', () => {
+  suiteTeardown(() => fs.rmSync(storage, { recursive: true, force: true }));
   const columns = () => vscode.window.tabGroups.all.filter((g) => !g.tabs.some((t) => t.label === 'Choose Layout'));
   const pageGroup = () => vscode.window.tabGroups.all.find((g) => g.tabs.some((t) => t.label === 'Choose Layout'));
 
