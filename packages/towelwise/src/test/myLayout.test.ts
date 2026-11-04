@@ -36,6 +36,7 @@ function windowWith(
   const told: string[] = [];
   const where = { ...containers };
   const host: MyLayoutHost = {
+    planTerminal: async (t) => ({ open: { name: t.name ?? 'Terminal' }, problems: [] }),
     sideBarOnRight: opts.sideBarOnRight ?? false,
     hyperspaceActive: () => opts.hyperspace ?? false,
     run: async (command) => {

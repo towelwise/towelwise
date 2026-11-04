@@ -2,6 +2,7 @@
 // sizes. Pure logic apart from the environment it is given, so it is tested without a window. Nothing is written until
 // Save, and everything that touches the environment runs on one queue, in arrival order, as the hyperspace page's does.
 import { AGENTS, AGENT_IDS, AgentId, AgentPlaces, HOLDS, Holds, PLACES, Place } from './agents';
+import { CellTerminal, SHELL_LABELS, TerminalShell, parseCellTerminal } from './cellTerminal';
 import {
   Column,
   MIN_CELL,
@@ -16,6 +17,7 @@ import {
   fromSavedGrid,
   removeColumn,
   removeRow,
+  setTerminal,
   toSavedGrid,
   validatePlaces,
 } from './columns';
@@ -51,6 +53,8 @@ export class LayoutDraft {
   private typed = new Set<PartName>();
   private orientation: Orientation | undefined;
   private sizesAvailable = true;
+  // The shells this machine has, once they are known.
+  private shells: TerminalShell[] | undefined;
   // Why the last change was refused, shown until the next change that works.
   private notice: string | undefined;
   // Counts changes, so Save can tell whether the draft moved on while it was waiting for the window.
@@ -153,6 +157,36 @@ export class LayoutDraft {
     this.cols = assign(this.cols, column, row, holds);
   }
 
+  /** Which terminal a terminal cell opens. */
+  setTerminal(column: number, row: number, terminal: CellTerminal): void {
+    this.revision++;
+    if (this.cols) this.cols = setTerminal(this.cols, column, row, terminal);
+  }
+
+  /** The shells found on this machine, offered for terminal cells. */
+  setShells(shells: TerminalShell[]): void {
+    this.shells = [...shells];
+  }
+
+  // A cell's terminal fields, with the shells to offer: this machine's, and the saved one even if it is not found.
+  // Until the machine's shells are known, only Default and the saved one are offered, and nothing is marked missing.
+  private terminalView(terminal: CellTerminal | undefined) {
+    const shell: TerminalShell = terminal?.shell ?? 'default';
+    const offered: TerminalShell[] = this.shells ? [...this.shells] : ['default'];
+    if (!offered.includes(shell)) offered.push(shell);
+    return {
+      shell,
+      name: terminal?.name ?? '',
+      folder: terminal?.folder ?? '',
+      command: terminal?.command ?? '',
+      placeholder: SHELL_LABELS[shell],
+      shells: offered.map((value) => ({
+        value,
+        label: this.shells && !this.shells.includes(value) ? `${SHELL_LABELS[value]} (not found)` : SHELL_LABELS[value],
+      })),
+    };
+  }
+
   /** A typed percentage; empty clears it. The panel's side is read at Save, so it is the side then. */
   setSize(part: PartName, text: string): Promise<void> {
     return this.enqueue(async () => {
@@ -200,7 +234,12 @@ export class LayoutDraft {
         notice: this.notice,
         columns: this.cols?.map((c) => ({
           size: c.size,
-          rows: c.rows.map((r) => ({ size: r.size, holds: r.holds ?? '', choices })),
+          rows: c.rows.map((r) => ({
+            size: r.size,
+            holds: r.holds ?? '',
+            choices,
+            ...(r.holds === 'terminal' ? { terminal: this.terminalView(r.terminal) } : {}),
+          })),
         })),
       },
       sizes: {
@@ -256,6 +295,7 @@ export type LayoutMessage =
   | { type: 'drag'; axis: 'column'; column: number; size: number }
   | { type: 'drag'; axis: 'row'; column: number; row: number; size: number }
   | { type: 'assign'; column: number; row: number; holds: Holds | '' }
+  | { type: 'terminal'; column: number; row: number; terminal: CellTerminal }
   | { type: 'size'; part: PartName; value: string };
 
 const isIndex = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
@@ -299,6 +339,10 @@ export function parseLayoutMessage(raw: unknown): LayoutMessage | undefined {
         return { type: 'assign', column: m.column, row: m.row, holds: m.holds as Holds | '' };
       }
       return undefined;
+    case 'terminal': {
+      const terminal = parseCellTerminal(m.terminal);
+      return isIndex(m.column) && isIndex(m.row) && terminal ? { type: 'terminal', column: m.column, row: m.row, terminal } : undefined;
+    }
     case 'size':
       return typeof m.value === 'string' && (PARTS as readonly unknown[]).includes(m.part) ? { type: 'size', part: m.part as PartName, value: m.value } : undefined;
     default:

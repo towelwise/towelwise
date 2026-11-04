@@ -207,7 +207,7 @@
             },
             "additionalProperties": false,
             "scope": "application",
-            "markdownDescription": "The editor area's grid for your layout: `orientation` (0 for columns) and `groups`, each with a `size` as a proportion of its parent, optional nested `groups`, and what it `holds` (`claudeCode`, `codex` or `terminal`). Every agent placed in a `column` in `towelwise.layout.agents` must be in exactly one cell. **Towelwise: Restore Layout** sets the grid, then puts each agent and terminal in its cell; it never closes a tab."
+            "markdownDescription": "The editor area's grid for your layout: `orientation` (0 for columns) and `groups`, each with a `size` as a proportion of its parent, optional nested `groups`, and what it `holds` (`claudeCode`, `codex` or `terminal`). A `terminal` cell may say which terminal in `terminal`: `shell` (`default`, `powershell`, `pwsh`, `cmd`, `gitbash` or `wsl`), `name`, `folder` (relative to the first workspace folder, or absolute) and a startup `command`, run once when Restore Layout opens it. Every agent placed in a `column` in `towelwise.layout.agents` must be in exactly one cell. **Towelwise: Restore Layout** sets the grid, then puts each agent and terminal in its cell; it never closes a tab."
           },
           "towelwise.layout.sizes": {
             "type": "object",

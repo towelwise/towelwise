@@ -1,5 +1,6 @@
 import * as assert from 'node:assert';
 import { AGENTS, Holds, coreContainerId, holdsOfTab } from '../agents';
+import { CellTerminal, TerminalOpen, terminalName } from '../cellTerminal';
 import { Column, toSavedGrid } from '../columns';
 import { Layout } from '../grid';
 import { Editors, MyLayout, MyLayoutHost, applyLayout, closeAgentTabs } from '../myLayout';
@@ -22,14 +23,24 @@ const leaves = (layout: Layout): number => {
   return count(layout.groups);
 };
 
-const tab = (holds?: Holds): Tab => ({ holds, label: holds ?? 'file' });
+const tab = (holds?: Holds, label?: string): Tab => ({ holds, label: label ?? holds ?? 'file' });
 
 // An editor area that behaves as the probes showed: setEditorLayout grows or merges groups, Claude Code opens in a group
 // of its own beside the first, Codex opens in the focused group, a terminal goes where it is asked, empty groups that
 // held a tab close.
 function editorWindow(
-  opts: { start?: Tab[][]; claudeOpens?: boolean; codexOpens?: boolean; gridIgnored?: boolean; gridFails?: boolean; keepIgnored?: boolean } = {},
+  opts: {
+    start?: Tab[][];
+    claudeOpens?: boolean;
+    codexOpens?: boolean;
+    gridIgnored?: boolean;
+    gridFails?: boolean;
+    keepIgnored?: boolean;
+    // What the host's planTerminal reports as falling back, for every terminal.
+    terminalProblems?: string[];
+  } = {},
 ) {
+  const opens: TerminalOpen[] = [];
   const groups: Group[] = (opts.start ?? [[]]).map((tabs) => ({ tabs, held: tabs.length > 0 }));
   const calls: string[] = [];
   const logs: string[] = [];
@@ -56,6 +67,7 @@ function editorWindow(
     groups: () => [...groups],
     tabs: (g) => (g as Group).tabs,
     kind: (t) => (t as Tab).holds,
+    label: (t) => (t as Tab).label,
     focus: async (g) => {
       focused = live(g as Group);
       calls.push(`focus ${at(focused)}`);
@@ -76,9 +88,10 @@ function editorWindow(
       calls.push(`close ${(t as Tab).label}`);
       closeEmpty();
     },
-    openTerminal: async (g) => {
+    openTerminal: async (g, open) => {
       const target = live(g as Group);
-      target.tabs.push(tab('terminal'));
+      if (open) opens.push(open);
+      target.tabs.push(tab('terminal', open?.name));
       target.held = true;
       calls.push(`terminal in ${at(target)}`);
     },
@@ -126,6 +139,10 @@ function editorWindow(
     parts: { sidebar: { visible: true, size: 300 }, auxiliarybar: { visible: true, size: 300 }, panel: { visible: true, size: 200 } },
   };
   const host: MyLayoutHost = {
+    planTerminal: async (t: CellTerminal) => ({
+      open: { name: terminalName(t), ...(t.folder ? { cwd: t.folder } : {}), ...(t.command ? { command: t.command } : {}) },
+      problems: opts.terminalProblems ?? [],
+    }),
     run,
     bridge: {
       state: async () => state,
@@ -154,7 +171,7 @@ function editorWindow(
     log: (line) => logs.push(line),
     tell: () => undefined,
   };
-  return { host, groups, calls, logs, editors };
+  return { host, groups, calls, logs, editors, opens };
 }
 
 // Three columns, the third split into two rows: Claude Code, Codex, a terminal, and an empty cell.
@@ -340,6 +357,51 @@ suite('my layout: columns', () => {
       const w = editorWindow({ start: [[tab('codex'), tab()], [tab('codex'), tab('terminal')]] });
       await closeAgentTabs(w.editors, 'codex');
       assert.deepStrictEqual(heldBy(w), [['file'], ['terminal']]);
+    });
+  });
+
+  suite('a chosen terminal', () => {
+    const terminalGrid = (terminal?: CellTerminal): MyLayout => ({
+      grid: toSavedGrid([{ size: 1, rows: [{ size: 1, holds: 'terminal', ...(terminal ? { terminal } : {}) }] }]),
+    });
+
+    test('opens as planned, named and with its startup command, in its cell', async () => {
+      const w = editorWindow();
+      const out = await applyLayout(w.host, terminalGrid({ shell: 'gitbash', name: 'Dev', folder: 'web', command: 'npm run dev' }));
+      assert.deepStrictEqual(w.opens, [{ name: 'Dev', cwd: 'web', command: 'npm run dev' }]);
+      assert.deepStrictEqual(w.groups.map((g) => g.tabs.map((t) => t.label)), [['Dev']]);
+      assert.deepStrictEqual(out.problems, []);
+    });
+
+    test('restoring again with it still in its cell opens nothing and runs nothing', async () => {
+      const w = editorWindow();
+      await applyLayout(w.host, terminalGrid({ shell: 'gitbash', command: 'npm run dev' }));
+      await applyLayout(w.host, terminalGrid({ shell: 'gitbash', command: 'npm run dev' }));
+      assert.strictEqual(w.opens.length, 1);
+      assert.deepStrictEqual(w.groups.map((g) => g.tabs.map((t) => t.label)), [['Git Bash']]);
+    });
+
+    test('another terminal in the cell does not count: the chosen one opens beside it', async () => {
+      const w = editorWindow({ start: [[tab('terminal', 'pwsh')]] });
+      await applyLayout(w.host, terminalGrid({ name: 'Dev' }));
+      assert.deepStrictEqual(w.groups.map((g) => g.tabs.map((t) => t.label)), [['pwsh', 'Dev']]);
+    });
+
+    test('a cell saved without a choice of terminal still counts any terminal, and opens the default one', async () => {
+      const filled = editorWindow({ start: [[tab('terminal', 'pwsh')]] });
+      await applyLayout(filled.host, terminalGrid());
+      assert.ok(!filled.calls.some((c) => c.startsWith('terminal')));
+      const empty = editorWindow();
+      await applyLayout(empty.host, terminalGrid());
+      assert.deepStrictEqual(empty.opens, []);
+      assert.ok(empty.calls.includes('terminal in 0'));
+    });
+
+    test('a shell or folder that fell back is reported, and the terminal is still in its cell', async () => {
+      const w = editorWindow({ terminalProblems: ['Git Bash: Git Bash was not found on this machine, so it opened in the default shell'] });
+      const out = await applyLayout(w.host, terminalGrid({ shell: 'gitbash' }));
+      assert.deepStrictEqual(out.problems, ['Git Bash: Git Bash was not found on this machine, so it opened in the default shell']);
+      assert.deepStrictEqual(w.groups.map((g) => g.tabs.map((t) => t.label)), [['Git Bash']]);
     });
   });
 

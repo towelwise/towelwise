@@ -1,9 +1,12 @@
+import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 import { AGENTS, AGENT_IDS, AgentId, AgentPlaces, Holds, Place, coreContainerId, parseAgents } from './agents';
-import { holdsInOrder, parseLayoutGrid } from './columns';
+import { CellTerminal, TerminalOpen, planTerminal, terminalName } from './cellTerminal';
+import { cellsInOrder, parseLayoutGrid } from './columns';
 import { Layout, SavedGrid, toLayout } from './grid';
 import { Bridge, applySizes, isActive } from './hyperspace';
 import { withLock } from './lock';
+import { Machine, detectMachine } from './shells';
 import { PARTS, Sizes, parseLayoutState, parseSizes } from './sizes';
 
 // The three places a view container can live. The bridge uses the same names as the layout parts.
@@ -27,10 +30,13 @@ export interface Editors {
   tabs(group: object): object[];
   /** What a tab is, if it is an agent or a terminal; undefined for anything else. */
   kind(tab: object): Holds | undefined;
+  /** The text on a tab; a terminal's is its name. */
+  label(tab: object): string;
   focus(group: object): PromiseLike<unknown>;
   moveTab(tab: object, to: object): PromiseLike<unknown>;
   closeTab(tab: object): PromiseLike<unknown>;
-  openTerminal(group: object): PromiseLike<unknown>;
+  /** Opens a terminal in the group: as described, or the default one; a startup command is sent once it is open. */
+  openTerminal(group: object, open?: TerminalOpen): PromiseLike<unknown>;
   /** Closes a group, which must be empty. */
   closeGroup(group: object): PromiseLike<unknown>;
   /**
@@ -48,6 +54,8 @@ export interface MyLayoutHost {
   bridge: Bridge & Mover;
   grid?: { apply(layout: Layout): PromiseLike<unknown> };
   editors?: Editors;
+  /** How a cell's terminal opens on this machine, with a problem line for each piece that falls back. */
+  planTerminal(terminal: CellTerminal): PromiseLike<{ open: TerminalOpen; problems: string[] }>;
   // workbench.sideBar.location: which side the primary side bar is on, so "left" always means the left of the screen.
   sideBarOnRight: boolean;
   hyperspaceActive(): boolean;
@@ -117,7 +125,8 @@ async function placeAgent(host: MyLayoutHost, id: AgentId, place: Place): Promis
   return problem;
 }
 
-const holdsLabel = (holds: Holds) => (holds === 'terminal' ? 'Terminal' : AGENTS[holds].label);
+const holdsLabel = (holds: Holds, terminal?: CellTerminal) =>
+  holds !== 'terminal' ? AGENTS[holds].label : terminal ? terminalName(terminal) : 'Terminal';
 
 // The first tab of this kind in the grid, and its group.
 function findTab(editors: Editors, holds: Holds): { tab: object; group: object } | undefined {
@@ -128,14 +137,31 @@ function findTab(editors: Editors, holds: Holds): { tab: object; group: object }
   return undefined;
 }
 
-// Puts what a cell should hold in the group `target`, which is held by reference: opening an agent can add a group
-// of its own and shift every number, and the group it leaves closes once empty.
-async function fillCell(host: MyLayoutHost, editors: Editors, holds: Holds, target: object): Promise<string | undefined> {
-  if (holds === 'terminal') {
-    if (editors.tabs(target).some((t) => editors.kind(t) === 'terminal')) return undefined;
-    await editors.openTerminal(target);
-    return undefined;
+// A terminal cell already holds its terminal: one with its name, or for a cell saved without a choice of terminal,
+// any terminal. Then restoring again opens nothing and reruns no command.
+async function fillTerminal(host: MyLayoutHost, editors: Editors, terminal: CellTerminal | undefined, target: object): Promise<string[]> {
+  const terminals = editors.tabs(target).filter((t) => editors.kind(t) === 'terminal');
+  if (!terminal) {
+    if (terminals.length === 0) await editors.openTerminal(target);
+    return [];
   }
+  const name = terminalName(terminal);
+  if (terminals.some((t) => editors.label(t) === name)) return [];
+  const { open, problems } = await host.planTerminal(terminal);
+  await editors.openTerminal(target, open);
+  return problems;
+}
+
+// Puts what a cell should hold in the group `target`, which is held by reference: opening an agent can add a group
+// of its own and shift every number, and the group it leaves closes once empty. Returns the problems; a terminal that
+// fell back to another shell or folder is still in its cell.
+async function fillCell(host: MyLayoutHost, editors: Editors, holds: Holds, terminal: CellTerminal | undefined, target: object): Promise<string[]> {
+  if (holds === 'terminal') return fillTerminal(host, editors, terminal, target);
+  const problem = await fillAgent(host, editors, holds, target);
+  return problem ? [problem] : [];
+}
+
+async function fillAgent(host: MyLayoutHost, editors: Editors, holds: Exclude<Holds, 'terminal'>, target: object): Promise<string | undefined> {
   const label = AGENTS[holds].label;
   const existing = findTab(editors, holds);
   if (existing) {
@@ -163,7 +189,7 @@ async function placeColumns(host: MyLayoutHost, grid: SavedGrid): Promise<string
   } catch (e) {
     return [`the editor grid could not be set (${errorText(e)})`];
   }
-  const wanted = holdsInOrder(grid);
+  const wanted = cellsInOrder(grid);
   const cells = editors.groups();
   if (cells.length !== wanted.length) {
     return [`the editor grid has ${cells.length} groups after it was set, not ${wanted.length}, so nothing was placed in its columns`];
@@ -173,14 +199,14 @@ async function placeColumns(host: MyLayoutHost, grid: SavedGrid): Promise<string
   // move. The groups an agent opens for itself are then left empty and closed here, and only those: a cell of the
   // grid stays, empty or not.
   const placeAll = async () => {
-    for (const [i, holds] of wanted.entries()) {
+    for (const [i, { holds, terminal }] of wanted.entries()) {
       if (!holds) continue;
       try {
-        const problem = await fillCell(host, editors, holds, cells[i]);
-        if (problem) problems.push(problem);
-        else host.log(`layout: ${holdsLabel(holds)} is in cell ${i + 1}`);
+        const found = await fillCell(host, editors, holds, terminal, cells[i]);
+        problems.push(...found);
+        if (found.length === 0) host.log(`layout: ${holdsLabel(holds, terminal)} is in cell ${i + 1}`);
       } catch (e) {
-        problems.push(`${holdsLabel(holds)}: could not be placed in its column (${errorText(e)})`);
+        problems.push(`${holdsLabel(holds, terminal)}: could not be placed in its column (${errorText(e)})`);
       }
     }
     for (const group of editors.groups()) {
@@ -278,8 +304,17 @@ export function readLayout(log: (line: string) => void): MyLayout | undefined {
   return layoutInUse(saved) ? saved : undefined;
 }
 
+// Found once per window: WSL is asked for its distributions, which takes a moment.
+let machine: Promise<Machine> | undefined;
+const isFolder = (p: string) => fs.statSync(p, { throwIfNoEntry: false })?.isDirectory() === true;
+
 export function liveHost(storageDir: string, log: (line: string) => void, editors?: Editors): MyLayoutHost {
   return {
+    planTerminal: async (terminal) => {
+      machine ??= detectMachine();
+      const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+      return planTerminal(terminal, await machine, folders, isFolder);
+    },
     run: (command) => vscode.commands.executeCommand(command),
     bridge: {
       state: async () => parseLayoutState(await vscode.commands.executeCommand('_towelwise.layout.state')),

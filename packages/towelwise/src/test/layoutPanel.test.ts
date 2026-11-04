@@ -104,6 +104,7 @@ function fakeHost(options: { busy?: boolean; gatedHold?: boolean } = {}) {
         events.push('release');
       }
     },
+    shells: async () => ['default'],
     wait: async () => {
       const g = gate();
       waits.push(g);

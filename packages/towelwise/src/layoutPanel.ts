@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
+import { TerminalShell, shellsOn } from './cellTerminal';
 import { LayoutDraft, LayoutEnv, SaveResult, parseLayoutMessage } from './layoutDraft';
 import { liveEditors } from './liveEditors';
 import { withLock } from './lock';
 import { Editors, readSaved } from './myLayout';
 import { pageHtml } from './picker';
+import { detectMachine } from './shells';
 import { parseLayoutState } from './sizes';
 
 // One page at a time. Its draft lives here, so hiding the page keeps it and closing the page drops it.
@@ -39,6 +41,8 @@ export interface PageHost {
   /** Runs work with empty groups held open and no restore or jump running in any window; false if one was. */
   holdEmptyGroups(work: () => Promise<void>): Promise<boolean>;
   wait(ms: number): Promise<void>;
+  /** The shells this machine has, offered for terminal cells. */
+  shells(): Promise<TerminalShell[]>;
 }
 
 /**
@@ -70,6 +74,7 @@ const liveHostFor = (storageDir: string): PageHost => ({
   run: (command) => vscode.commands.executeCommand(command),
   holdEmptyGroups: lockedHold(storageDir, liveEditors),
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  shells: async () => shellsOn(await detectMachine()),
 });
 
 /** Closes the page if it is open (the tests use this to leave no window behind). */
@@ -128,6 +133,16 @@ export function openLayoutPage(
   const send = (extra: { result?: SaveResult } = {}) =>
     panel.webview.postMessage({ type: 'state', ...draft.view(), clearResult: !extra.result, ...extra });
 
+  // Finding the shells can take a moment (WSL is asked for its distributions), so the page is drawn first and
+  // offers them once they are known.
+  host.shells().then(
+    (shells) => {
+      draft.setShells(shells);
+      if (!closed) void send();
+    },
+    (e: unknown) => log(`Choose Layout could not find this machine's shells: ${e instanceof Error ? e.message : String(e)}`),
+  );
+
   panel.webview.onDidReceiveMessage(
     async (raw: unknown) => {
       const message = parseLayoutMessage(raw);
@@ -166,6 +181,9 @@ export function openLayoutPage(
             break;
           case 'assign':
             draft.assign(message.column, message.row, message.holds === '' ? undefined : message.holds);
+            break;
+          case 'terminal':
+            draft.setTerminal(message.column, message.row, message.terminal);
             break;
           case 'size':
             await draft.setSize(message.part, message.value);

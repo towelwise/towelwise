@@ -108,8 +108,17 @@ export const liveEditors: Editors = {
     await vscode.window.tabGroups.close(groupOf(group));
     registry.splice(at, 1);
   },
-  openTerminal: async (group) => {
-    vscode.window.createTerminal({ location: { viewColumn: groupOf(group).viewColumn, preserveFocus: true } });
+  label: (tab) => (tab as vscode.Tab).label,
+  openTerminal: async (group, open) => {
+    const terminal = vscode.window.createTerminal({
+      name: open?.name,
+      shellPath: open?.shellPath,
+      shellArgs: open?.shellArgs,
+      cwd: open?.cwd,
+      location: { viewColumn: groupOf(group).viewColumn, preserveFocus: true },
+    });
+    // VS Code holds the text until the shell is ready for it.
+    if (open?.command) terminal.sendText(open.command);
   },
   async keepEmptyGroups(work) {
     await serially(async () => {

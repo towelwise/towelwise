@@ -24,6 +24,7 @@ const KNOWN = [
   'removeRow',
   'drag',
   'assign',
+  'terminal',
   'size',
 ];
 

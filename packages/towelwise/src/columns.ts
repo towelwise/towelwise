@@ -2,11 +2,14 @@
 // A column with one row is a plain cell; a column with several is a nested group, the shape VS Code's editor layout
 // uses. Sizes are proportions of the parent (the columns of the window, the rows of a column) and always sum to 1.
 import { AGENTS, AGENT_IDS, AgentPlaces, Holds } from './agents';
+import { CellTerminal, isEmptyTerminal } from './cellTerminal';
 import { SavedGrid, SavedNode, parseSavedGrid } from './grid';
 
 export interface Row {
   size: number;
   holds?: Holds;
+  // Only on a row that holds a terminal.
+  terminal?: CellTerminal;
 }
 
 export interface Column {
@@ -38,7 +41,8 @@ function dragged<T extends { size: number }>(items: T[], at: number, wanted: num
   return next;
 }
 
-const copy = (cols: Column[]): Column[] => cols.map((c) => ({ size: c.size, rows: c.rows.map((r) => ({ ...r })) }));
+const copy = (cols: Column[]): Column[] =>
+  cols.map((c) => ({ size: c.size, rows: c.rows.map((r) => ({ ...r, ...(r.terminal ? { terminal: { ...r.terminal } } : {}) })) }));
 
 export const defaultColumns = (): Column[] => [
   { size: 0.5, rows: [{ size: 1 }] },
@@ -102,7 +106,7 @@ export function dragRowEdge(cols: Column[], column: number, row: number, wanted:
 
 /**
  * Puts something in a cell, or empties it (undefined). An agent is in one cell only, so it leaves its old one;
- * a terminal may be in as many cells as the person likes.
+ * a terminal may be in as many cells as the person likes. A cell that stops holding a terminal drops its terminal's choices.
  */
 export function assign(cols: Column[], column: number, row: number, holds: Holds | undefined): Column[] {
   const next = copy(cols);
@@ -110,17 +114,34 @@ export function assign(cols: Column[], column: number, row: number, holds: Holds
   if (holds && holds !== 'terminal') {
     for (const c of next) for (const r of c.rows) if (r.holds === holds) delete r.holds;
   }
-  if (holds) next[column].rows[row].holds = holds;
-  else delete next[column].rows[row].holds;
+  const target = next[column].rows[row];
+  if (holds !== 'terminal') delete target.terminal;
+  if (holds) target.holds = holds;
+  else delete target.holds;
   return next;
 }
 
-const cell = (size: number, holds?: Holds): SavedNode => (holds ? { size, holds } : { size });
+/** Sets which terminal a terminal cell opens; an empty one is the default. Unchanged for a cell that is not a terminal. */
+export function setTerminal(cols: Column[], column: number, row: number, terminal: CellTerminal): Column[] {
+  const next = copy(cols);
+  const target = next[column]?.rows[row];
+  if (!target || target.holds !== 'terminal') return next;
+  if (isEmptyTerminal(terminal)) delete target.terminal;
+  else target.terminal = { ...terminal };
+  return next;
+}
+
+const cell = (size: number, row: Row): SavedNode => ({
+  size,
+  ...(row.holds ? { holds: row.holds } : {}),
+  ...(row.terminal ? { terminal: { ...row.terminal } } : {}),
+});
+const row = (size: number, node: SavedNode): Row => cell(size, node);
 
 export const toSavedGrid = (cols: Column[]): SavedGrid => ({
   orientation: 0,
   groups: cols.map((c) =>
-    c.rows.length === 1 ? cell(c.size, c.rows[0].holds) : { size: c.size, groups: c.rows.map((r) => cell(r.size, r.holds)) },
+    c.rows.length === 1 ? cell(c.size, c.rows[0]) : { size: c.size, groups: c.rows.map((r) => cell(r.size, r)) },
   ),
 });
 
@@ -130,20 +151,24 @@ export function fromSavedGrid(grid: SavedGrid): Column[] | undefined {
   const cols: Column[] = [];
   for (const node of grid.groups) {
     if (!node.groups) {
-      cols.push({ size: node.size, rows: [node.holds ? { size: 1, holds: node.holds } : { size: 1 }] });
+      cols.push({ size: node.size, rows: [row(1, node)] });
       continue;
     }
     if (node.groups.some((r) => r.groups)) return undefined;
-    cols.push({ size: node.size, rows: node.groups.map((r) => (r.holds ? { size: r.size, holds: r.holds } : { size: r.size })) });
+    cols.push({ size: node.size, rows: node.groups.map((r) => row(r.size, r)) });
   }
   return cols;
 }
 
-/** What each cell holds, in the grid's reading order (left to right, top to bottom within a column). */
-export function holdsInOrder(grid: SavedGrid): (Holds | undefined)[] {
-  const walk = (nodes: SavedNode[]): (Holds | undefined)[] => nodes.flatMap((n) => (n.groups ? walk(n.groups) : [n.holds]));
+/** What each cell holds, and for a terminal which terminal, in the grid's reading order (left to right, top to bottom within a column). */
+export function cellsInOrder(grid: SavedGrid): { holds?: Holds; terminal?: CellTerminal }[] {
+  const walk = (nodes: SavedNode[]): { holds?: Holds; terminal?: CellTerminal }[] =>
+    nodes.flatMap((n) => (n.groups ? walk(n.groups) : [{ holds: n.holds, terminal: n.terminal }]));
   return walk(grid.groups);
 }
+
+/** What each cell holds, in the grid's reading order. */
+export const holdsInOrder = (grid: SavedGrid): (Holds | undefined)[] => cellsInOrder(grid).map((c) => c.holds);
 
 const PLACE_NAMES = { left: 'the left side bar', right: 'the right side bar', panel: 'the bottom panel', column: 'a column' } as const;
 

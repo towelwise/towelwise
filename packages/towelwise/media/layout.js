@@ -102,8 +102,46 @@ function cellNode(grid, column, columnData, row, rowData) {
   const tools = el('div', 'tools');
   tools.append(button('Split', () => send({ type: 'addRow', column, row }), 'small', `split-${column}-${row}`));
   if (columnData.rows.length > 1) tools.append(button('Remove', () => send({ type: 'removeRow', column, row }), 'small', `rmrow-${column}-${row}`));
-  cell.append(select, tools);
+  cell.append(select);
+  if (rowData.terminal) cell.append(terminalFields(column, row, rowData.terminal));
+  cell.append(tools);
   return cell;
+}
+
+// Which terminal a terminal cell opens. Any change sends all four fields, as the person sees them now.
+function terminalFields(column, row, terminal) {
+  const box = el('div', 'terminal');
+  const key = (field) => `terminal-${field}-${column}-${row}`;
+  const shell = el('select');
+  shell.dataset.key = key('shell');
+  for (const choice of terminal.shells) {
+    const option = el('option', '', choice.label);
+    option.value = choice.value;
+    option.selected = choice.value === terminal.shell;
+    shell.append(option);
+  }
+  const text = (field, label, placeholder) => {
+    const input = el('input');
+    input.type = 'text';
+    input.value = terminal[field];
+    input.placeholder = placeholder;
+    input.dataset.key = key(field);
+    input.setAttribute('aria-label', `${label}, column ${column + 1}, row ${row + 1}`);
+    return input;
+  };
+  const name = text('name', 'Name', terminal.placeholder);
+  const folder = text('folder', 'Folder', 'Workspace folder');
+  const command = text('command', 'Startup command', 'None');
+  const changed = () =>
+    send({ type: 'terminal', column, row, terminal: { shell: shell.value, name: name.value, folder: folder.value, command: command.value } });
+  shell.setAttribute('aria-label', `Shell, column ${column + 1}, row ${row + 1}`);
+  for (const control of [shell, name, folder, command]) control.addEventListener('change', changed);
+  for (const [label, control] of [['Shell', shell], ['Name', name], ['Folder', folder], ['Startup command', command]]) {
+    const line = el('label');
+    line.append(el('span', '', label), control);
+    box.append(line);
+  }
+  return box;
 }
 
 function columnNode(grid, column, columnData) {
