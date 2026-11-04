@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { LayoutDraft, LayoutEnv, SaveResult, parseLayoutMessage } from './layoutDraft';
+import { liveEditors } from './liveEditors';
 import { readSaved } from './myLayout';
 import { pageHtml } from './picker';
 import { parseLayoutState } from './sizes';
@@ -26,18 +27,49 @@ const liveEnv: LayoutEnv = {
   },
 };
 
+// True from the moment the page closes itself for a restore until the page is back. Nothing else opens a page
+// meanwhile: the restore brings this draft back, and a second page would take its place and lose it.
+let restoring = false;
+
+// What the page needs from VS Code, so tests can stand in for the window.
+export interface PageHost {
+  createPanel(media: vscode.Uri): vscode.WebviewPanel;
+  run(command: string): Thenable<unknown>;
+  keepEmptyGroups<T>(work: () => Promise<T>): Promise<T>;
+  wait(ms: number): Promise<void>;
+}
+
+const liveHost: PageHost = {
+  createPanel: (media) =>
+    vscode.window.createWebviewPanel('towelwise.layout.choose', 'Choose Layout', vscode.ViewColumn.Active, {
+      enableScripts: true,
+      localResourceRoots: [media],
+    }),
+  run: (command) => vscode.commands.executeCommand(command),
+  keepEmptyGroups: (work) => liveEditors.keepEmptyGroups(work),
+  wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
+
+/** Closes the page if it is open (the tests use this to leave no window behind). */
+export function closeLayoutPage(): void {
+  current?.panel.dispose();
+}
+
 // `kept` is a draft carried over from a page that closed itself for a restore (see 'restore' below).
-export function openLayoutPage(context: vscode.ExtensionContext, log: (line: string) => void, kept?: LayoutDraft): void {
+export function openLayoutPage(
+  context: vscode.ExtensionContext,
+  log: (line: string) => void,
+  kept?: LayoutDraft,
+  host: PageHost = liveHost,
+): void {
+  if (restoring) return;
   if (current) {
     current.panel.reveal();
     return;
   }
 
   const media = vscode.Uri.joinPath(context.extensionUri, 'media');
-  const panel = vscode.window.createWebviewPanel('towelwise.layout.choose', 'Choose Layout', vscode.ViewColumn.Active, {
-    enableScripts: true,
-    localResourceRoots: [media],
-  });
+  const panel = host.createPanel(media);
   current = { panel };
   const draft = kept ?? new LayoutDraft(readSaved(log), liveEnv);
   const uri = (file: string) => panel.webview.asWebviewUri(vscode.Uri.joinPath(media, file)).toString();
@@ -50,11 +82,14 @@ export function openLayoutPage(context: vscode.ExtensionContext, log: (line: str
   });
 
   // The page opens as a tab in the active group, then moves to its own window so it does not sit among
-  // (or split) the editor groups the layout is about. If the move fails, the page stays where it is.
-  void Promise.resolve(vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow')).then(
-    undefined,
-    (e: unknown) => log(`Choose Layout could not move to its own window: ${e instanceof Error ? e.message : String(e)}`),
-  );
+  // (or split) the editor groups the layout is about. If the move fails, the page stays where it is. The page
+  // may be the only tab in an empty group, and VS Code closes a group when its last tab leaves, which would
+  // remove a column the person set up; empty groups are held open for the move.
+  void host
+    .keepEmptyGroups(async () => host.run('workbench.action.moveEditorToNewWindow'))
+    .then(undefined, (e: unknown) =>
+      log(`Choose Layout could not move to its own window: ${e instanceof Error ? e.message : String(e)}`),
+    );
 
   // A Save result is shown until the person changes something; any other update clears it.
   const send = (extra: { result?: SaveResult } = {}) =>
@@ -112,12 +147,14 @@ export function openLayoutPage(context: vscode.ExtensionContext, log: (line: str
             // Restore moves focus between editor groups, which acts on the window that has focus. From this
             // page's own window it would rearrange the page, so the page closes first, the restore runs in
             // the main window, and the page comes back with the same unsaved draft.
+            restoring = true;
             panel.dispose();
-            await new Promise((resolve) => setTimeout(resolve, 300)); // let focus return to the main window
             try {
-              await vscode.commands.executeCommand('towelwise.layout.restore');
+              await host.wait(300); // let focus return to the main window
+              await host.run('towelwise.layout.restore');
             } finally {
-              openLayoutPage(context, log, draft);
+              restoring = false;
+              openLayoutPage(context, log, draft, host);
             }
             return;
           case 'reload':
