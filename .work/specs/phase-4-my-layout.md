@@ -72,13 +72,14 @@ Best effort throughout: one step failing is logged and reported at the end, and 
 
 ## Keeping it: drift detection
 
-VS Code has no resize event for the editor grid, so Towelwise compares live state with the saved layout when the window gains focus and every 30 seconds while focused (cheap: one `getEditorLayout`, one bridge read).
+VS Code has no resize event for the editor grid, so Towelwise compares live state with the saved layout when the window gains focus and every 30 seconds while focused (cheap: one read of the main window's grid, one bridge read of the sizes). With the bridge the grid comes from `_towelwise.layout.mainLayout`, the main window's grid whichever window is active (a floating editor window can be open and focused). Without it (stock VS Code) the grid comes from `getEditorLayout`, which answers for the active window, and is kept only when it holds every editor group there is, counted after the read, so it can only be the main window's; the sizes need the bridge and are then left out.
 
 - **Drift** is: the grid's shape differs from the saved one, any proportion differs from saved by more than 3% of its parent, or a side bar or panel size differs by more than 3 points of the window.
 - On drift, one notification (not modal): **Your layout has changed since you saved it.** Buttons: **Save this layout**, **Restore saved layout**, **Not now**. *Not now* silences the prompt until the live state changes again or the window reloads; the saved layout then applies at the next window start.
 - **Save this layout** captures the live grid proportions and sizes, keeping each cell's `holds` and each agent's place. If the shape itself differs (a column added or removed), it cannot know what the new cells hold, so the button becomes **Edit layout…** and opens Choose Layout with the live shape.
 - Never prompts while hyperspace is active, while Choose Layout is open, while an apply is running, or in a window that has no saved layout.
 - Moving an agent to another side bar is not detected in this slice (see Out of scope); it is corrected at the next apply.
+- *Not now* (and the baseline taken after an apply) silences only what it measured. A part it could not read then (the grid in stock VS Code with a floating window open, a hidden side bar) does not stay silent once it can be read: if it has drifted from the saved layout, the prompt is shown.
 
 ## The core patch (extension of 0003, new in this slice)
 
@@ -86,6 +87,8 @@ Added to the existing layout bridge patch, not a new patch. Underscore command n
 
 - `_towelwise.layout.locate(containerId)` returns `'sidebar' | 'auxiliarybar' | 'panel'` or undefined (unknown container), from `IViewDescriptorService.getViewContainerLocation`.
 - `_towelwise.layout.moveContainer(containerId, location)` calls `IViewDescriptorService.moveViewContainerToLocation(container, location, undefined, 'towelwise')`, the call VS Code's own drag and drop makes. Returns false if the container does not exist or cannot move.
+
+- `_towelwise.layout.mainLayout()` (slice C) returns `IEditorGroupsService.mainPart.getLayout()`: the main window's editor grid in the shape `vscode.getEditorLayout` returns for the active window.
 
 The patch README gets the new commands and upkeep rows as for 0003. Needs a full IDE build and the owner's built-app check.
 
@@ -95,7 +98,7 @@ Each is spec-checked, built test-first, reviewed by Codex and checked by the own
 
 - **A. Placement of side views.** The patch additions, the agent registry (container ids, open commands) in the extension, and a first **Restore Layout** that does steps 1, 2 and 5 only. Needs a full build. The owner's check: choose left/right/panel for each agent through the settings value, run Restore Layout, reload.
 - **B. Choose Layout and the grid.** The picker page (steps 1 to 3, sizes, Save, the reload message), the `towelwise.layout.agents`, `.grid` and `.sizes` settings, and apply steps 3 and 4. Extension only.
-- **C. Keeping it.** Apply on window start and drift detection with its prompt. Extension only.
+- **C. Keeping it.** Apply on window start and drift detection with its prompt. Extension, plus one more bridge command, `_towelwise.layout.mainLayout` (added 2026-11-05 so the grid can be read while a floating editor window is open and focused; amends 0003 in place and needs the next full build and the owner's built-app check). The extension still works without it.
 
 ## What carries over from the editor-grid slice, and what does not
 
@@ -111,7 +114,7 @@ Each is spec-checked, built test-first, reviewed by Codex and checked by the own
 4. **Restore Layout.** Applies steps 2 to 5 in a window that has things open or nothing open. Running it twice leaves the same result (nothing opened twice, no new empty columns).
 5. **Never destructive.** No tab is closed. Tabs that are not a chosen item are not moved except where VS Code folds a removed group's tabs on a shape change.
 6. **Start.** A new window applies the saved layout once after its editors have restored, unless `applyOnStartup` is false or hyperspace is active.
-7. **Drift.** Changing a proportion more than the tolerance shows the prompt once; the three buttons do what is described; *Not now* stays quiet until the state changes again.
+7. **Drift.** Changing a proportion more than the tolerance shows the prompt once; the three buttons do what is described; *Not now* stays quiet until the state changes again. With a floating editor window open and focused, the main window's grid is still compared (with the bridge).
 8. **Best effort.** Any step failing is logged and reported; the rest still run. A malformed setting is ignored and logged.
 9. **No second copy.** An agent placed in a side bar or the panel that is also open as an editor tab is reported with a **Close it** button; nothing closes unless it is pressed.
 10. **Hyperspace unaffected.** Jump and restore behave as before; no drift prompt or startup apply during hyperspace.

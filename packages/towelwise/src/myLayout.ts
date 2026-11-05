@@ -272,6 +272,24 @@ export async function closeAgentTabs(editors: Editors, id: AgentId): Promise<voi
  * still run. Nothing is closed.
  */
 export async function applyLayout(host: MyLayoutHost, layout: MyLayout): Promise<Outcome> {
+  applying++;
+  try {
+    return await applyNow(host, layout);
+  } finally {
+    applying--;
+    for (const listener of whenApplied) listener();
+  }
+}
+
+// Applies running in this window, and who is told when one ends: the drift watch keeps quiet during one and starts again after.
+let applying = 0;
+const whenApplied: (() => void)[] = [];
+export const isApplying = (): boolean => applying > 0;
+export function onApplied(listener: () => void): void {
+  whenApplied.push(listener);
+}
+
+async function applyNow(host: MyLayoutHost, layout: MyLayout): Promise<Outcome> {
   const outcome: Outcome = { placed: [], problems: [], openAsTab: [] };
   if (host.hyperspaceActive()) return { ...outcome, refused: 'hyperspace' };
   const report = (problem: string) => {
@@ -312,6 +330,57 @@ export async function applyLayout(host: MyLayoutHost, layout: MyLayout): Promise
  */
 export function applyLayoutLocked(storageDir: string, host: MyLayoutHost, layout: MyLayout): Promise<Outcome | 'busy'> {
   return withLock<Outcome | 'busy'>(storageDir, () => applyLayout(host, layout), 'busy');
+}
+
+/** How a report reaches the person: a message, and a message with a button that says whether it was pressed. */
+export interface ReportUi {
+  tell(message: string): void;
+  offer(message: string, button: string): PromiseLike<boolean>;
+}
+
+/**
+ * Tells the person what an apply could not do: what was not placed, an agent also open as an editor tab (with a button
+ * that closes it; nothing closes otherwise), or that hyperspace is on. The returned promise ends when the offer does, so
+ * callers that must not wait for the person do not await it.
+ */
+export async function reportOutcome(outcome: Outcome, ui: ReportUi, closeTabs: (id: AgentId) => PromiseLike<unknown>): Promise<void> {
+  if (outcome.refused) {
+    ui.tell('Towelwise: leave hyperspace first, then restore your layout.');
+    return;
+  }
+  if (outcome.problems.length > 0) ui.tell(`Towelwise: your layout is applied, except: ${outcome.problems.join('; ')}.`);
+  if (outcome.openAsTab.length === 0) return;
+  const names = outcome.openAsTab.map((id) => AGENTS[id].label).join(' and ');
+  const pressed = await ui.offer(`Towelwise: ${names} also open${outcome.openAsTab.length > 1 ? '' : 's'} as an editor tab.`, 'Close it');
+  if (pressed) for (const id of outcome.openAsTab) await closeTabs(id);
+}
+
+/**
+ * Applies the saved layout when a window opens, unless the person turned that off or hyperspace is on, and hands the
+ * outcome to `report`, which gives the same report as Restore Layout. Returns whether a layout was applied.
+ */
+export async function applyLayoutOnStartup(
+  storageDir: string,
+  host: MyLayoutHost,
+  layout: MyLayout,
+  report: (outcome: Outcome) => void = () => undefined,
+): Promise<boolean> {
+  if (!vscode.workspace.getConfiguration('towelwise.layout').get('applyOnStartup', true)) return false;
+  if (host.hyperspaceActive()) {
+    host.log('layout: not applied on startup, because hyperspace is on');
+    return false;
+  }
+  const outcome = await applyLayoutLocked(storageDir, host, layout);
+  if (outcome === 'busy') {
+    host.log('layout: not applied on startup, because another window is restoring or jumping');
+    return false;
+  }
+  if (outcome.refused) {
+    host.log('layout: not applied on startup, because hyperspace is on');
+    return false;
+  }
+  report(outcome);
+  return true;
 }
 
 /** What the three layout settings hold now; each part that is not saved, or does not fit, is left out and logged. */

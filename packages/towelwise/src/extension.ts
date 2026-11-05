@@ -2,15 +2,27 @@ import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { isActive, restore, setLog, toggle } from './hyperspace';
 import { applyOnStartup, liveVsCode, restoreLayout } from './layout';
+import { keepWatching } from './drift';
 import { keepLayoutRecordIn, openLayoutPage, recoverSavedLayout } from './layoutPanel';
-import { AGENTS } from './agents';
 import { keepHoldRecordIn, liveEditors, recoverHeldSetting } from './liveEditors';
-import { applyLayoutLocked, closeAgentTabs, liveHost, readLayout } from './myLayout';
+import { applyLayoutLocked, applyLayoutOnStartup, closeAgentTabs, liveHost, Outcome, readLayout, reportOutcome } from './myLayout';
 import { logMenuProblems } from './menuEntries';
 import { openPicker } from './pickerPanel';
 import { available, detectMachine, launch, SHELL_KEYS, ShellKey, startDir } from './shells';
 
 const showError = (e: unknown) => void vscode.window.showErrorMessage(e instanceof Error ? e.message : String(e));
+
+// The report after an apply, for Restore Layout and for a window opening alike. Nothing is closed for the person: they are
+// told, and may close the second copy with one press.
+const reportApplied = (outcome: Outcome): Promise<void> =>
+  reportOutcome(
+    outcome,
+    {
+      tell: (message) => void vscode.window.showInformationMessage(message),
+      offer: async (message, button) => (await vscode.window.showInformationMessage(message, button)) === button,
+    },
+    (id) => closeAgentTabs(liveEditors, id),
+  );
 
 export function activate(context: vscode.ExtensionContext): void {
   // globalStorage is one folder shared by every window, so hyperspace is a single shared state.
@@ -83,19 +95,7 @@ export function activate(context: vscode.ExtensionContext): void {
             void vscode.window.showInformationMessage('Towelwise: another restore or jump is running right now. Try again in a moment.');
             return;
           }
-          if (outcome.refused) {
-            void vscode.window.showInformationMessage('Towelwise: leave hyperspace first, then restore your layout.');
-          } else if (outcome.problems.length > 0) {
-            void vscode.window.showInformationMessage(`Towelwise: your layout is applied, except: ${outcome.problems.join('; ')}.`);
-          }
-          // Nothing is closed for the person: they are told, and may close the second copy with one press.
-          if (outcome.openAsTab.length > 0) {
-            const names = outcome.openAsTab.map((id) => AGENTS[id].label).join(' and ');
-            void vscode.window.showInformationMessage(`Towelwise: ${names} also open${outcome.openAsTab.length > 1 ? '' : 's'} as an editor tab.`, 'Close it').then(async (choice) => {
-              if (choice !== 'Close it') return;
-              for (const id of outcome.openAsTab) await closeAgentTabs(liveEditors, id);
-            });
-          }
+          void reportApplied(outcome).catch(showError);
           return;
         }
         const { ran, skipped } = await restoreLayout(await liveVsCode(log));
@@ -117,8 +117,12 @@ export function activate(context: vscode.ExtensionContext): void {
   void (async () => {
     await recoverHeldSetting(storageDir, log).catch(showError);
     await recoverSavedLayout(storageDir, vscode.workspace.getConfiguration('towelwise.layout'), log).catch(showError);
-    // Quiet on purpose: a missing agent should not nag on every window open.
-    await applyOnStartup(storageDir, () => liveVsCode(log), log).catch(showError);
+    // The old container list is quiet on purpose; a saved layout reports what it could not place, as Restore Layout does.
+    const mine = readLayout(log);
+    if (mine) await applyLayoutOnStartup(storageDir, liveHost(storageDir, log, liveEditors), mine, (outcome) => void reportApplied(outcome).catch(showError)).catch(showError);
+    else await applyOnStartup(storageDir, () => liveVsCode(log)).catch(showError);
+    // Only now, so the first look at the window is after the layout was applied.
+    await keepWatching(storageDir, context, log).catch(showError);
   })();
 
   if (isActive(storageDir)) {

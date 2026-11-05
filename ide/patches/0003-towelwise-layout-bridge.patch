@@ -3,12 +3,12 @@ new file mode 100644
 index 0000000..0eea66b
 --- /dev/null
 +++ b/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,119 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Towelwise AI: a bridge that lets the built-in Towelwise extension read and set the sizes of the side bars
 + *  and the panel, move a view container between the side bars and the panel, and work on the main window's editor
 + *  groups when other editor windows are open. It holds no feature logic: it reports the layout service's state, sets
-+ *  one size, says where a container lives or moves it, counts the main window's editor groups, and brings the main
++ *  one size, says where a container lives or moves it, counts the main window's editor groups and reads their grid, and brings the main
 + *  window to the front.
 + *  The leading underscore keeps the commands out of the Command Palette; it is not an access boundary.
 + *--------------------------------------------------------------------------------------------*/
@@ -102,6 +102,9 @@ index 0000000..0eea66b
 +// The main window's editor group count. Groups are numbered across windows main window first, so the main window's
 +// groups are view columns 1 to this count.
 +CommandsRegistry.registerCommand('_towelwise.layout.mainGroupCount', accessor => accessor.get(IEditorGroupsService).mainPart.count);
++
++// The main window's editor grid, in the shape vscode.getEditorLayout returns for whichever window is active.
++CommandsRegistry.registerCommand('_towelwise.layout.mainLayout', accessor => accessor.get(IEditorGroupsService).mainPart.getLayout());
 +
 +// Brings the main window to the front and focuses its active editor group, so the commands that act on the active
 +// editor window (setting the editor grid, focusing groups, moving tabs) act on the main window. True once the main

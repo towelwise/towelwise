@@ -7,7 +7,7 @@ import { TerminalShell, shellsOn } from './cellTerminal';
 import { LayoutDraft, LayoutEnv, SaveResult, parseLayoutMessage } from './layoutDraft';
 import { liveEditors } from './liveEditors';
 import { withLock } from './lock';
-import { Editors, readSaved } from './myLayout';
+import { Editors, MyLayout, readSaved } from './myLayout';
 import { pageHtml } from './picker';
 import { detectMachine } from './shells';
 import { parseLayoutState } from './sizes';
@@ -26,7 +26,7 @@ const liveEnv: LayoutEnv = {
       return undefined;
     }
   },
-  write: saveSettings,
+  write: saveLayoutSettings,
 };
 
 /** The slice of a settings section that writeAll and recoverSavedLayout use. */
@@ -150,7 +150,7 @@ export function keepLayoutRecordIn(storageDir: string | undefined): void {
 }
 
 // One save at a time across windows, and not while another window restores: recovery treats a record it finds as left over.
-async function saveSettings(values: Values): Promise<void> {
+export async function saveLayoutSettings(values: Values): Promise<void> {
   const dir = recordDir;
   if (!dir) return writeAll(config(), values);
   const saved = await withLock(dir, async () => (await writeAll(config(), values, layoutRecordPath(dir)), true), false);
@@ -203,6 +203,14 @@ const liveHostFor = (storageDir: string): PageHost => ({
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   shells: async () => shellsOn(await detectMachine()),
 });
+
+/** Whether the page is open or a restore it started is running: the drift prompt keeps out of the way then. */
+export const isLayoutPageBusy = (): boolean => current !== undefined || restoring;
+
+/** Opens the page on a layout other than the saved one, such as the window as it is now. */
+export function openLayoutPageFrom(context: vscode.ExtensionContext, log: (line: string) => void, layout: MyLayout): void {
+  openLayoutPage(context, log, new LayoutDraft(layout, liveEnv));
+}
 
 /** Closes the page if it is open (the tests use this to leave no window behind). */
 export function closeLayoutPage(): void {
