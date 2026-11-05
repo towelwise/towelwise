@@ -355,6 +355,21 @@ suite('live editors', () => {
     });
   });
 
+  suite('a terminal opened for a cell', () => {
+    // A reloaded window brings persistent terminals back under their process's title ("bash"), not the name given here, so
+    // a restore could not tell them from new ones and doubled every terminal cell (seen in the built app, 2026-11-05).
+    test('is not restored by VS Code on reload, because the layout opens it again', async () => {
+      await liveEditors.openTerminal(liveEditors.groups()[0], { name: 'Towelwise test terminal' });
+      const terminal = vscode.window.terminals.find((t) => t.name === 'Towelwise test terminal');
+      try {
+        assert.ok(terminal, 'the terminal opened');
+        assert.strictEqual((terminal.creationOptions as vscode.TerminalOptions).isTransient, true);
+      } finally {
+        terminal?.dispose();
+      }
+    });
+  });
+
   suite('groups past the eighth', () => {
     test('can focus the tenth group and move a tab out of it, and the groups stay', async () => {
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
