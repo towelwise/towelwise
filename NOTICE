@@ -1,4 +1,15 @@
-Towelwise
-Copyright 2026 The Towelwise Authors
+Towelwise AI
+Copyright 2026 Johnny T and the Towelwise AI contributors
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+"Towelwise", "Towelwise AI", "Towelwise Recall", "Towelwise Guide" and "DOUG"
+are names of the Towelwise AI project. The license does not grant permission
+to use them; forks and derivative works should use their own names.
+
+Towelwise AI is built from Code-OSS (Copyright Microsoft Corporation, MIT
+License), starting from the build scripts of VSCodium (MIT License). Towelwise
+Recall is planned to be built on Hindsight by Vectorize (MIT License).
+
+Towelwise AI is not affiliated with or endorsed by the estate of Douglas Adams,
+Anthropic, OpenAI, Google, Microsoft or Vectorize.
