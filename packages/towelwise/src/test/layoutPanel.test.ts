@@ -433,6 +433,41 @@ suite('saving the layout settings, with a record on disk', () => {
     assert.ok(!fs.existsSync(record()));
   });
 
+  suite('saving again after a save that could not be put right', () => {
+    // The first save fails on grid and cannot put agents back, so the record holds the only copy of the old agents.
+    const stuckSave = async (stillBroken: () => boolean) => {
+      const state = fake(old, (k, v) => stillBroken() && ((k === 'grid' && v === next.grid) || (k === 'agents' && JSON.stringify(v) === JSON.stringify(old.agents))));
+      await assert.rejects(() => writeAll(state.section, asValues(next), record()), /grid is locked/);
+      return state;
+    };
+
+    test('a retry that fails again leaves the old values on disk, and changes nothing', async () => {
+      const { values, section } = await stuckSave(() => true);
+      const writesBefore = JSON.stringify(values);
+      await assert.rejects(() => writeAll(section, asValues(next), record()));
+      assert.strictEqual(JSON.stringify(values), writesBefore, 'nothing new was written on top of the mix');
+      assert.ok(fs.existsSync(record()), 'the record still holds the original agents');
+    });
+
+    test('the next start still gets the original back after a retry that failed', async () => {
+      let broken = true;
+      const { values, section } = await stuckSave(() => broken);
+      await assert.rejects(() => writeAll(section, asValues(next), record()));
+      broken = false;
+      await recoverSavedLayout(dir, section);
+      assert.deepStrictEqual(values, old);
+    });
+
+    test('a retry that can put the old values back does so first, then saves', async () => {
+      let broken = true;
+      const { values, section } = await stuckSave(() => broken);
+      broken = false;
+      await writeAll(section, asValues(next), record());
+      assert.deepStrictEqual(values, next);
+      assert.ok(!fs.existsSync(record()));
+    });
+  });
+
   suite('the next start', () => {
     // A window that died mid-save: the record is on disk and the settings named here already carry their new values.
     const diedAfter = (written: string[]) => {
@@ -493,6 +528,16 @@ suite('saving the layout settings, with a record on disk', () => {
       assert.ok(fs.existsSync(record()));
       await recoverSavedLayout(dir, section);
       assert.deepStrictEqual(values, old);
+    });
+
+    test('an old value that says it was there but is not given is dropped, not taken as "no value"', async () => {
+      const { values, section } = fake(old);
+      values.agents = next.agents;
+      const before = { ...entries(old), agents: { had: true } };
+      fs.writeFileSync(record(), JSON.stringify({ before, after: next }));
+      assert.strictEqual(await recoverSavedLayout(dir, section), false);
+      assert.deepStrictEqual(values.agents, next.agents, 'the setting is left as it is');
+      assert.ok(!fs.existsSync(record()));
     });
 
     for (const [name, text] of [

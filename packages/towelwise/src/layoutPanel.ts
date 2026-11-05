@@ -52,6 +52,9 @@ const same = (a: unknown, b: unknown): boolean => isDeepStrictEqual(jsonCopy(a),
  * (recoverSavedLayout). The original failure always reaches the caller.
  */
 export async function writeAll(section: SettingsSection, values: Values, recordFile?: string): Promise<void> {
+  // A record still here is from an earlier save that could not be put right: its old values are the only copy. Settle it
+  // first; if that fails, nothing is written, so the record is not replaced by one that starts from the half-saved mix.
+  if (recordFile && fs.existsSync(recordFile)) await putBackFromRecord(recordFile, section);
   const before = KEYS.map((key) => section.inspect(key)?.globalValue);
   if (recordFile) {
     const old = Object.fromEntries(KEYS.map((key, i) => [key, before[i] === undefined ? { had: false } : { had: true, value: before[i] }]));
@@ -85,7 +88,9 @@ export async function writeAll(section: SettingsSection, values: Values, recordF
 }
 
 type Entry = { had: boolean; value?: unknown };
-const isEntry = (e: unknown): e is Entry => typeof e === 'object' && e !== null && typeof (e as Entry).had === 'boolean';
+// An old value that was there must be given; without it "no value" would be guessed, and the user's setting removed.
+const isEntry = (e: unknown): e is Entry =>
+  typeof e === 'object' && e !== null && typeof (e as Entry).had === 'boolean' && (!(e as Entry).had || 'value' in e);
 
 /** The record, if it has the whole shape writeAll gives it. */
 function readRecord(file: string): { before: Record<string, Entry>; after: Record<string, unknown> } | undefined {
@@ -110,32 +115,31 @@ function readRecord(file: string): { before: Record<string, Entry>; after: Recor
 export async function recoverSavedLayout(storageDir: string, section: SettingsSection, log: (line: string) => void = () => undefined): Promise<boolean> {
   const file = layoutRecordPath(storageDir);
   if (!fs.existsSync(file)) return false;
-  return withLock(
-    storageDir,
-    async () => {
-      const saved = readRecord(file);
-      if (!saved) {
-        fs.rmSync(file, { force: true });
-        log('dropped a layout save record that could not be read');
-        return false;
+  return withLock(storageDir, () => putBackFromRecord(file, section, log), false);
+}
+
+// The part of recovery that needs the lock already held: false if the record was not whole.
+async function putBackFromRecord(file: string, section: SettingsSection, log: (line: string) => void = () => undefined): Promise<boolean> {
+  const saved = readRecord(file);
+  if (!saved) {
+    fs.rmSync(file, { force: true });
+    log('dropped a layout save record that could not be read');
+    return false;
+  }
+  const now = KEYS.map((key) => section.inspect(key)?.globalValue);
+  // Every setting carries its new value: the save finished, and only the record was left.
+  if (!KEYS.every((key, i) => same(now[i], saved.after[key]))) {
+    for (const [i, key] of KEYS.entries()) {
+      const old = saved.before[key];
+      const was = old.had ? old.value : undefined;
+      if (same(now[i], saved.after[key]) && !same(now[i], was)) {
+        await section.update(key, was, vscode.ConfigurationTarget.Global);
+        log(`put ${key} back after a layout save was cut short`);
       }
-      const now = KEYS.map((key) => section.inspect(key)?.globalValue);
-      // Every setting carries its new value: the save finished, and only the record was left.
-      if (!KEYS.every((key, i) => same(now[i], saved.after[key]))) {
-        for (const [i, key] of KEYS.entries()) {
-          const old = saved.before[key];
-          const was = old.had ? old.value : undefined;
-          if (same(now[i], saved.after[key]) && !same(now[i], was)) {
-            await section.update(key, was, vscode.ConfigurationTarget.Global);
-            log(`put ${key} back after a layout save was cut short`);
-          }
-        }
-      }
-      fs.rmSync(file, { force: true });
-      return true;
-    },
-    false,
-  );
+    }
+  }
+  fs.rmSync(file, { force: true });
+  return true;
 }
 
 let recordDir: string | undefined;
