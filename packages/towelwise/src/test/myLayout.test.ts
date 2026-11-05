@@ -4,7 +4,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { applyLayout, applyLayoutLocked, applyLayoutOnStartup, layoutInUse, locationFor, MyLayoutHost, Outcome, reportOutcome } from '../myLayout';
+import { applyLayout, applyLayoutLocked, applyLayoutOnStartup, MyLayoutHost, Outcome, reportOutcome } from '../myLayout';
+import { agentsByPart, layoutInUse, locationFor } from '../savedLayout';
 import { LayoutState } from '../sizes';
 
 const noLog = () => undefined;
@@ -99,6 +100,31 @@ suite('agents and my layout', () => {
       assert.strictEqual(locationFor('right', true), 'sidebar');
       assert.strictEqual(locationFor('panel', true), 'panel');
       assert.strictEqual(locationFor('column', false), undefined);
+    });
+  });
+
+  suite('agentsByPart', () => {
+    const none = { sidebar: [], auxiliarybar: [], panel: [] };
+
+    test('an agent lives in the part its place names, on either side of the window', () => {
+      const agents = { claudeCode: 'left', codex: 'right' } as const;
+      assert.deepStrictEqual(agentsByPart({ agents }, false), { sidebar: ['claudeCode'], auxiliarybar: ['codex'], panel: [] });
+      assert.deepStrictEqual(agentsByPart({ agents }, true), { sidebar: ['codex'], auxiliarybar: ['claudeCode'], panel: [] });
+    });
+
+    test('an agent on the panel puts the panel in use', () => {
+      assert.deepStrictEqual(agentsByPart({ agents: { codex: 'panel' } }, false), { ...none, panel: ['codex'] });
+    });
+
+    test('two agents in one part are both named', () => {
+      assert.deepStrictEqual(agentsByPart({ agents: { claudeCode: 'right', codex: 'right' } }, false), { ...none, auxiliarybar: ['claudeCode', 'codex'] });
+    });
+
+    test('a column agent, a grid or sizes alone, and no layout leave every part unused', () => {
+      assert.deepStrictEqual(agentsByPart({ agents: { codex: 'column' } }, false), none);
+      assert.deepStrictEqual(agentsByPart({ sizes: { sidebar: 0.2 } }, false), none);
+      assert.deepStrictEqual(agentsByPart({ grid: { orientation: 0, groups: [{ size: 1, holds: 'terminal' }] } }, false), none);
+      assert.deepStrictEqual(agentsByPart(undefined, false), none);
     });
   });
 

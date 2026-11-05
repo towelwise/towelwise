@@ -148,7 +148,7 @@
           "towelwise.hyperspace.sizes": {
             "type": "object",
             "default": {},
-            "description": "The widths and heights hyperspace sets, as proportions of the window from 0 to 1: the primary side bar (sidebar) and secondary side bar (auxiliarybar) widths, and the bottom panel (panel) with its orientation (panelOrientation: across when the panel is left or right, down when top or bottom). Set it from Edit Hyperspace Layout. Parts left out keep their size.",
+            "description": "The widths and heights hyperspace sets, as proportions of the window from 0 to 1: the primary side bar (sidebar) and secondary side bar (auxiliarybar) widths, and the bottom panel (panel) with its orientation (panelOrientation: across when the panel is left or right, down when top or bottom). Set it from Edit Hyperspace Layout. Parts left out keep their size. Used only when no layout is saved with Choose Layout; a saved layout's sizes apply instead.",
             "properties": {
               "sidebar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
               "auxiliarybar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
@@ -160,7 +160,7 @@
           "towelwise.hyperspace.editorGrid": {
             "type": "object",
             "default": {},
-            "description": "The editor area's columns and rows that hyperspace re-applies: orientation (0 for columns, 1 for rows) and groups, each with a size as a proportion of its parent, an optional label for the picker, and optional nested groups. Set it with Use current layout in Edit Hyperspace Layout. It only changes proportions; it never opens, closes or moves a tab, and it is left alone if the editor area's columns and rows no longer match.",
+            "description": "The editor area's columns and rows that hyperspace re-applies: orientation (0 for columns, 1 for rows) and groups, each with a size as a proportion of its parent, an optional label for the picker, and optional nested groups. Set it with Use current layout in Edit Hyperspace Layout. It only changes proportions; it never opens, closes or moves a tab, and it is left alone if the editor area's columns and rows no longer match. Used only when no layout is saved with Choose Layout; a saved layout's editor grid applies instead.",
             "properties": {
               "orientation": { "enum": [0, 1] },
               "groups": { "type": "array", "items": { "type": "object" } }

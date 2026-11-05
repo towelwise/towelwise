@@ -5,7 +5,8 @@ import * as vscode from 'vscode';
 import { Layout, SavedGrid, SavedNode, leafCount, maxDifference, parseLayout, sameShape, toSaved } from './grid';
 import { isActive } from './hyperspace';
 import { saveLayoutSettings, isLayoutPageBusy, openLayoutPageFrom } from './layoutPanel';
-import { MyLayout, isApplying, onApplied, readLayout } from './myLayout';
+import { MyLayout, isApplying, onApplied } from './myLayout';
+import { readLayout } from './savedLayout';
 import { LayoutState, PARTS, Sizes, orientationOf, parseLayoutState, toProportions } from './sizes';
 
 /** How far a proportion may be from the saved one before it counts: 3% of its parent, or 3 points of the window. */

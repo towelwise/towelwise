@@ -25,7 +25,7 @@ This is the working roadmap: the order things get built, and what "done" means f
 | 1 | Set up the workshop | Done |
 | 2 | Extension groundwork (hyperspace, layout, walkthrough) | Done; becomes the built-in extension |
 | 3 | **First build** of Towelwise AI | Done (2026-11-03); the timed upstream update is standing upkeep |
-| 4 | **The layout editor** and locked hyperspace | In progress: sizes, editor-grid layouts and My layout (saving, restoring, applying at window start and noticing drift) work; locked hyperspace is next |
+| 4 | **The layout editor** | In progress: sizes, editor-grid layouts and My layout (saving, restoring, applying at window start and noticing drift) work, and hyperspace now reads the layout |
 | 5 | The memory experiment (Hindsight on Windows) | Can run alongside Phase 4 |
 | 6 | **Towelwise Recall**: the mailbox, then the Probability Drive | — |
 | 7 | **Towelwise Guide**: fundamentals library first | — |
@@ -93,13 +93,13 @@ A real Towelwise AI app for Windows, with no core patches of our own. See [the s
 
 The first core patch, kept small and careful. This is the headline feature: your UI, your way.
 
-**Where it stands (2026-11-05):** the first core patch (the layout bridge) is in. Sizes work, the Edit Hyperspace Layout picker works, and so do Choose Layout and Restore Layout for agents, editor columns and terminals. The layout also applies when a window opens, and a prompt appears when the window has drifted from it. Next is locked hyperspace.
+**Where it stands (2026-11-05):** the first core patch (the layout bridge) is in. Sizes work, the Edit Hyperspace Layout picker works, and so do Choose Layout and Restore Layout for agents, editor columns and terminals. The layout also applies when a window opens, and a prompt appears when the window has drifted from it. Hyperspace now reads the layout: it never hides an area the layout puts an agent in, and it applies the layout's sizes and editor grid ([spec](.work/specs/phase-4-hyperspace-from-layout.md)).
 
-**Slice order (owner, 2026-11-03):** sizes first ([spec](.work/specs/phase-4-sizes.md)), then editor-grid layouts, then locked hyperspace. The first-run screen needs no patch and can come at any time. Default keys are close to trivial.
+**Slice order (owner, 2026-11-03):** sizes first ([spec](.work/specs/phase-4-sizes.md)), then editor-grid layouts, then hyperspace reading My layout (locked hyperspace was dropped for it on 2026-11-05). The first-run screen needs no patch and can come at any time. Default keys are close to trivial.
 
 1. **The layout editor.** Turn each part of the window on or off, and set its width and height. On or off is done: the Edit Hyperspace Layout picker shows a mock window where you choose Keep or Hide for each part. Boxes drawn over the live window were tried as a spike on 2026-11-02 and dropped, because the picker was clearer and the boxes looked worse. Setting widths and heights is what still needs the first core patch.
 2. **Save as your hyperspace layout.** Sizes are proportions at first, so they carry across screens.
-3. **Locked hyperspace.** While it's on, the window holds to your layout and no other way. Anything that wants to open shows a notification instead; click it and it opens in a hovering window you can dismiss.
+3. ~~Locked hyperspace~~ Dropped 2026-11-05. Hyperspace already keeps what you chose and hides the rest, so blocking things from reopening is not needed. Replaced by **hyperspace reads My layout**: areas the layout puts an agent in are never hidden, and the layout's sizes and editor grid are the ones hyperspace applies. Done.
 4. **Default keys** for going in and out of hyperspace, with more to come. Today's defaults are `Alt+Shift+J` and `Alt+Shift+L`.
 5. **Works for anyone:** agents, plain text editing without AI, folder lists, whatever they choose.
 5a. **Editor-grid layouts (owner, 2026-11-03).** Several agents and panels side by side in the editor area, for example three columns: Claude Code, Codex, and a third split into a terminal above the Recall dashboard. The built-in `vscode.setEditorLayout` command sets nested editor groups with proportional sizes, Claude Code opens as an editor tab, terminals can open in the editor area, and hyperspace always keeps the editor area, so no core patch is expected. The slice starts with a short test: whether Codex opens in a chosen group (it declares an editor, `chatgpt.conversationEditor`), and whether both agents' tabs come back after a reload. This overlaps "named layouts" below.
@@ -261,7 +261,7 @@ Sizes are source-code size in the pinned Code-OSS, not the installed app. "Outsi
 | ~~Weekly hours, so the prototype can be dated honestly~~ Answered 2026-10-31: about 5 to 10 hours a week. Updated 2026-11-03: likely more, but it can drop to zero for days at a time, so each slice should leave the app usable on its own | Done |
 | Is the upstream upkeep sustainable at that pace? | Phase 3 |
 | Which agents go on the "more agents" list? (Claude Code and Codex are first; Cline, Gemini Code Assist and Kilo Code are candidates once checked) | Phase 4 |
-| Does today's layout merge into the hyperspace layout, or stay separate? | Phase 4 |
+| ~~Does today's layout merge into the hyperspace layout, or stay separate?~~ Answered 2026-11-05: the hyperspace layout is built on the layout | Done |
 | What is left of the quiet profile idea, now the whole IDE can be quiet? | Phase 4 |
 | When is the first public release, and what does it need? (Signing, an installer, updates, Anthropic's answer on install buttons, OpenAI's terms) | After Phase 4 |
 | ~~Does DOUG stay in the core?~~ Answered 2026-10-31: no. Order is Hyperspace and Recall, then Learning, then DOUG later | Done |

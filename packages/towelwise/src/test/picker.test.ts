@@ -5,7 +5,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { AREAS, CHROME, restore, toggle } from '../hyperspace';
 import { Draft, OPTIONS, pageHtml, parseMessage } from '../picker';
-import { LayoutState } from '../sizes';
+import { AgentId } from '../agents';
+import { LayoutState, PartName } from '../sizes';
 
 const GLOBAL = vscode.ConfigurationTarget.Global;
 const WORKSPACE = vscode.ConfigurationTarget.Workspace;
@@ -740,5 +741,153 @@ suite('picker', () => {
     assert.deepStrictEqual((writes[0] as { panel: number; panelOrientation: string }).panel, 0.3);
     assert.strictEqual((writes[0] as { panelOrientation: string }).panelOrientation, 'across');
     assert.deepStrictEqual(draft.sizesView().rows.map((r) => r.typed), [false, false, true]);
+  });
+
+  // A stand-in for the saved layout: which agents live in each part (change `agents` to change the layout under a
+  // Draft), whether any layout is saved, and whether the cross-window layout lock can be taken.
+  const layoutOf = (agents: Partial<Record<PartName, AgentId[]>> = {}, saved = true) => {
+    const env = {
+      saved,
+      busy: false,
+      agents: { sidebar: [], auxiliarybar: [], panel: [], ...agents } as Record<PartName, AgentId[]>,
+      // A fresh snapshot per read, as the real reader gives: sharing `env.agents` would let a later change leak into a Draft's view.
+      read: () => ({ saved: env.saved, agents: JSON.parse(JSON.stringify(env.agents)) as Record<PartName, AgentId[]> }),
+      hold: async (work: () => Promise<void>) => {
+        if (env.busy) return false;
+        await work();
+        return true;
+      },
+    };
+    return env;
+  };
+  const item = (draft: Draft, option: string) => draft.items().find((i) => i.option === option)!;
+
+  test('an area the layout puts an agent in is shown locked as Keep, with the reason, and cannot be set to Hide', () => {
+    const draft = new Draft(undefined, undefined, undefined, layoutOf({ auxiliarybar: ['codex'], panel: ['claudeCode', 'codex'] }));
+    assert.deepStrictEqual([item(draft, 'hideSecondarySideBar').choice, item(draft, 'hideSecondarySideBar').locked], ['keep', 'Codex lives here']);
+    assert.strictEqual(item(draft, 'hideBottomPanel').locked, 'Claude Code and Codex live here');
+    assert.throws(() => draft.choose('hideSecondarySideBar', 'hide'), /in use/);
+    // The area the layout leaves empty, and the chrome, still toggle.
+    assert.strictEqual(item(draft, 'hidePrimarySideBar').locked, undefined);
+    draft.choose('hidePrimarySideBar', 'hide');
+    assert.strictEqual(item(draft, 'hidePrimarySideBar').choice, 'hide');
+  });
+
+  test('a stored Hide on an in-use area is shown as Keep, Save writes nothing for it, and the choice returns when the area is free', async () => {
+    await config().update(key('hideSecondarySideBar'), true, GLOBAL);
+    const layout = layoutOf({ auxiliarybar: ['codex'] });
+    const none = spy();
+    const draft = new Draft(none.write, undefined, undefined, layout);
+    assert.strictEqual(item(draft, 'hideSecondarySideBar').choice, 'keep');
+    assert.deepStrictEqual((await draft.save()).written, []);
+    assert.deepStrictEqual(none.writes, []);
+    assert.strictEqual(globalOf('hideSecondarySideBar'), true);
+
+    layout.agents.auxiliarybar = [];
+    await draft.refreshLive();
+    assert.deepStrictEqual([item(draft, 'hideSecondarySideBar').choice, item(draft, 'hideSecondarySideBar').locked], ['hide', undefined]);
+  });
+
+  test('an area that becomes in use while Save is writing is skipped and reported, and never given a hide value', async () => {
+    await config().update(key('hideBottomPanel'), false, GLOBAL);
+    const layout = layoutOf();
+    const writes: string[] = [];
+    const write = async (option: string, value: boolean) => {
+      writes.push(option);
+      await config().update(key(option), value, GLOBAL);
+      // Another window saves a layout with an agent in the panel between this write and the next.
+      if (option === 'hideActivityBar') layout.agents.panel = ['codex'];
+    };
+    const draft = new Draft(write, undefined, undefined, layout);
+    draft.choose('hideActivityBar', 'keep');
+    draft.choose('hideBottomPanel', 'hide');
+
+    const result = await draft.save();
+    assert.deepStrictEqual(writes, ['hideActivityBar']);
+    assert.deepStrictEqual(result.written, ['hideActivityBar']);
+    assert.deepStrictEqual(result.skipped, [{ option: 'hideBottomPanel', reason: 'Codex lives here' }]);
+    assert.strictEqual(globalOf('hideBottomPanel'), false);
+    // The skipped choice is dropped from the draft, so the next Save does not report it again.
+    assert.deepStrictEqual((await draft.save()).skipped, undefined);
+  });
+
+  test('the page defers sizes and the editor grid to the layout only while a layout is saved', async () => {
+    const layout = layoutOf({}, false);
+    const draft = new Draft(undefined, undefined, undefined, layout);
+    assert.strictEqual(draft.layoutSaved(), false);
+    layout.saved = true;
+    assert.strictEqual(draft.layoutSaved(), false, 'read when the page opens, not on every look');
+    await draft.refreshLive();
+    assert.strictEqual(draft.layoutSaved(), true);
+    assert.deepStrictEqual(parseMessage({ type: 'chooseLayout' }), { type: 'chooseLayout' });
+  });
+
+  test('Save changes nothing and says to try again when another window holds the layout lock', async () => {
+    const layout = layoutOf();
+    layout.busy = true;
+    const none = spy();
+    const draft = new Draft(none.write, undefined, undefined, layout);
+    draft.choose('hideActivityBar', 'keep');
+    const result = await draft.save();
+    assert.deepStrictEqual(none.writes, []);
+    assert.deepStrictEqual(result.written, []);
+    assert.match(result.failed?.message ?? '', /busy with a layout. Try saving again in a moment/);
+
+    layout.busy = false;
+    assert.deepStrictEqual((await draft.save()).written, ['hideActivityBar']);
+  });
+
+  test('once a layout is saved, Save leaves the hidden sizes and editor grid alone, keeps them as drafts, and still saves the rest', async () => {
+    const layout = layoutOf({}, false);
+    const sizes = sizeEnv(live());
+    const grid = gridEnv({ layout: threeColumns, labels: [] });
+    const none = spy();
+    const draft = new Draft(none.write, sizes.env as never, grid.env as never, layout);
+    await draft.useCurrentSizes();
+    await draft.useCurrentLayout();
+    draft.choose('hideActivityBar', 'keep');
+    layout.saved = true; // another window saves a layout; this page has not looked again
+
+    const result = await draft.save();
+    assert.deepStrictEqual(result.written, ['hideActivityBar']);
+    assert.strictEqual(result.failed, undefined);
+    assert.deepStrictEqual(sizes.writes, []);
+    assert.deepStrictEqual(grid.writes, []);
+    assert.strictEqual(draft.layoutSaved(), true, 'Save looked at the layout again');
+
+    // The drafts were kept, not discarded: with the layout gone, the next Save writes them.
+    layout.saved = false;
+    assert.deepStrictEqual((await draft.save()).written, ['sizes', 'editorGrid']);
+  });
+
+  test('size text that cannot be saved no longer blocks Save once a layout has taken over the sizes', async () => {
+    const layout = layoutOf({}, false);
+    const sizes = sizeEnv(live());
+    const none = spy();
+    const draft = new Draft(none.write, sizes.env as never, undefined, layout);
+    await draft.setSize('panel', 'abc');
+    draft.choose('hideActivityBar', 'keep');
+    assert.ok((await draft.save()).failed, 'without a layout, the bad size is refused');
+
+    layout.saved = true;
+    const result = await draft.save();
+    assert.strictEqual(result.failed, undefined);
+    assert.deepStrictEqual(result.written, ['hideActivityBar']);
+    assert.deepStrictEqual(sizes.writes, []);
+  });
+
+  test('when Save finds a layout saved meanwhile, the page state it returns shows the lock and the note', async () => {
+    await config().update(key('hideBottomPanel'), false, GLOBAL);
+    const layout = layoutOf({}, false);
+    const draft = new Draft(spy().write, undefined, undefined, layout);
+    draft.choose('hideBottomPanel', 'hide');
+    layout.saved = true;
+    layout.agents.panel = ['codex'];
+
+    const result = await draft.save();
+    assert.deepStrictEqual(result.skipped, [{ option: 'hideBottomPanel', reason: 'Codex lives here' }]);
+    assert.strictEqual(draft.layoutSaved(), true);
+    assert.strictEqual(item(draft, 'hideBottomPanel').locked, 'Codex lives here');
+    assert.throws(() => draft.choose('hideBottomPanel', 'hide'), /in use/);
   });
 });

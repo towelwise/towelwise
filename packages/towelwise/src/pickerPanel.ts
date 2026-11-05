@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isActive } from './hyperspace';
-import { Draft, pageHtml, parseMessage } from './picker';
+import { holdLayoutSaves } from './layoutPanel';
+import { Draft, liveLayoutEnv, pageHtml, parseMessage } from './picker';
 
 // One panel at a time. Its draft lives here, so hiding the panel keeps it and closing the panel drops it.
 let current: { panel: vscode.WebviewPanel } | undefined;
@@ -18,7 +19,7 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
     localResourceRoots: [media],
   });
   current = { panel };
-  const draft = new Draft();
+  const draft = new Draft(undefined, undefined, undefined, { read: liveLayoutEnv.read, hold: holdLayoutSaves });
   const uri = (file: string) => panel.webview.asWebviewUri(vscode.Uri.joinPath(media, file)).toString();
   panel.webview.html = pageHtml({
     cspSource: panel.webview.cspSource,
@@ -35,6 +36,7 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
       sizes: draft.sizesView(),
       names: draft.namesView(),
       grid: draft.gridView(),
+      layoutSaved: draft.layoutSaved(),
       hyperspaceOn: isActive(storageDir),
       ...extra,
     });
@@ -68,6 +70,9 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
           case 'clearGrid':
             await draft.clearGrid();
             await send();
+            break;
+          case 'chooseLayout':
+            await vscode.commands.executeCommand('towelwise.layout.choose');
             break;
           case 'size':
             await draft.setSize(message.part, message.value);

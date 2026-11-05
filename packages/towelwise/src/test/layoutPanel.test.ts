@@ -3,7 +3,19 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { PageHost, SettingsSection, closeLayoutPage, layoutRecordPath, lockedHold, openLayoutPage, recoverSavedLayout, writeAll } from '../layoutPanel';
+import {
+  PageHost,
+  SettingsSection,
+  closeLayoutPage,
+  holdLayoutSaves,
+  keepLayoutRecordIn,
+  layoutRecordPath,
+  lockedHold,
+  openLayoutPage,
+  recoverSavedLayout,
+  saveLayoutSettings,
+  writeAll,
+} from '../layoutPanel';
 import { withLock } from '../lock';
 
 // The real lock files go in a folder of their own, not the extension's storage.
@@ -271,6 +283,56 @@ suite('layout page hold and the cross-window lock', () => {
 
   test('the lock is released when the move fails, and the failure reaches the caller', async () => {
     await assert.rejects(() => lockedHold(dir, editors)(async () => Promise.reject(new Error('boom'))), /boom/);
+    assert.strictEqual(await withLock(dir, async () => 'ran', 'busy'), 'ran');
+  });
+});
+
+// The hyperspace picker's Save runs under holdLayoutSaves. With the record folder set it must be the lock layout saves
+// take, or the picker's in-use check and its write could be split by a layout saved in another window.
+suite('hyperspace picker hold of layout saves, with the real lock', () => {
+  let dir: string;
+  setup(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'towelwise-picker-hold-'));
+    keepLayoutRecordIn(dir);
+  });
+  teardown(() => {
+    keepLayoutRecordIn(undefined);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  const agentsNow = () => vscode.workspace.getConfiguration('towelwise.layout').inspect('agents')?.globalValue;
+
+  test('while it holds, a layout save is told it is busy and writes nothing', async () => {
+    const before = agentsNow();
+    const inside = gate();
+    const release = gate();
+    const holding = holdLayoutSaves(async () => {
+      inside.release();
+      await release.promise;
+    });
+    await inside.promise;
+    await assert.rejects(() => saveLayoutSettings({ agents: { codex: 'right' }, grid: undefined, sizes: undefined }), /busy with a layout/);
+    assert.deepStrictEqual(agentsNow(), before);
+    assert.strictEqual(fs.existsSync(layoutRecordPath(dir)), false, 'the save did not even start its record');
+    release.release();
+    assert.strictEqual(await holding, true);
+    assert.strictEqual(await withLock(dir, async () => 'ran', 'busy'), 'ran', 'released once the work ends');
+  });
+
+  test('while a layout save holds the lock, the hold is refused and its work does not run', async () => {
+    // saveLayoutSettings is withLock on this folder; the stand-in holds the same lock without writing settings.
+    const saving = gate();
+    const layoutSave = withLock<string>(dir, async () => (await saving.promise, 'done'), 'busy');
+    let ran = false;
+    assert.strictEqual(await holdLayoutSaves(async () => void (ran = true)), false);
+    assert.strictEqual(ran, false);
+    saving.release();
+    await layoutSave;
+    assert.strictEqual(await holdLayoutSaves(async () => void (ran = true)), true, 'free again once the save ends');
+    assert.strictEqual(ran, true);
+  });
+
+  test('the lock is released when the work throws, and the failure reaches the caller', async () => {
+    await assert.rejects(() => holdLayoutSaves(async () => Promise.reject(new Error('boom'))), /boom/);
     assert.strictEqual(await withLock(dir, async () => 'ran', 'busy'), 'ran');
   });
 });

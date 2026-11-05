@@ -1,16 +1,14 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
-import { AGENTS, AGENT_IDS, AgentId, AgentPlaces, Holds, Place, coreContainerId, parseAgents } from './agents';
+import { AGENTS, AGENT_IDS, AgentId, AgentPlaces, Holds, Place, coreContainerId } from './agents';
 import { CellTerminal, TerminalOpen, isEmptyTerminal, planTerminal, terminalName } from './cellTerminal';
-import { cellsInOrder, parseLayoutGrid } from './columns';
+import { cellsInOrder } from './columns';
 import { Layout, SavedGrid, toLayout } from './grid';
 import { Bridge, applySizes, isActive } from './hyperspace';
 import { withLock } from './lock';
+import { Location, locationFor } from './savedLayout';
 import { Machine, detectMachine } from './shells';
-import { PARTS, Sizes, parseLayoutState, parseSizes } from './sizes';
-
-// The three places a view container can live. The bridge uses the same names as the layout parts.
-export type Location = 'sidebar' | 'auxiliarybar' | 'panel';
+import { PARTS, Sizes, parseLayoutState } from './sizes';
 
 /** What the core bridge adds for moving views, beside reading and setting sizes. */
 export interface Mover {
@@ -102,13 +100,6 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const TAB_WAIT_MS = 15000;
 // A revived terminal that has not got its name back by then is not going to.
 const TERMINAL_NAME_WAIT_MS = 5000;
-
-/** Where "left", "right" or "panel" is, given which side the primary side bar is on. A column is not a location. */
-export function locationFor(place: Place, sideBarOnRight: boolean): Location | undefined {
-  if (place === 'panel') return 'panel';
-  if (place === 'column') return undefined;
-  return (place === 'left') !== sideBarOnRight ? 'sidebar' : 'auxiliarybar';
-}
 
 // The first of an agent's containers that the window has, and where it lives.
 async function findContainer(host: MyLayoutHost, id: AgentId): Promise<{ id: string; at: unknown } | undefined> {
@@ -418,26 +409,6 @@ export async function applyLayoutOnStartup(
   }
   report(outcome);
   return true;
-}
-
-/** What the three layout settings hold now; each part that is not saved, or does not fit, is left out and logged. */
-export function readSaved(log: (line: string) => void): MyLayout {
-  const config = vscode.workspace.getConfiguration('towelwise.layout');
-  const agents = parseAgents(config.get<unknown>('agents'), log);
-  return {
-    agents,
-    grid: parseLayoutGrid(config.get<unknown>('grid'), agents, log),
-    sizes: parseSizes(config.get<unknown>('sizes'), log),
-  };
-}
-
-/** Whether the person has saved a layout with Choose Layout: agents, a grid or sizes. Otherwise the earlier container list applies. */
-export const layoutInUse = (saved: MyLayout): boolean => Boolean(saved.agents || saved.grid || (saved.sizes && Object.keys(saved.sizes).length > 0));
-
-/** The saved layout, or undefined when none is saved (then the earlier container list applies). */
-export function readLayout(log: (line: string) => void): MyLayout | undefined {
-  const saved = readSaved(log);
-  return layoutInUse(saved) ? saved : undefined;
 }
 
 // Found once per window: WSL is asked for its distributions, which takes a moment.

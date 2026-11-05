@@ -9,7 +9,7 @@ This extension is not released on its own. It runs inside Towelwise AI, and also
 | Command | Default key | What it does |
 | --- | --- | --- |
 | **Towelwise: Jump to Hyperspace** | `Alt+Shift+J` | Hides the parts of the window you choose, leaving your agents in view. Run it again to put your settings back exactly. |
-| **Towelwise: Edit Hyperspace Layout** | | A clickable mock window where you choose Keep or Hide for each part, and set the sizes hyperspace uses. |
+| **Towelwise: Edit Hyperspace Layout** | | A clickable mock window where you choose Keep or Hide for each part. Areas your saved layout puts an agent in are locked as Keep. Without a saved layout it also sets the sizes and editor grid hyperspace uses. |
 | **Towelwise: Choose Layout** | | A page where you choose your agents, where each lives (a side bar, the bottom panel or an editor column), build the editor columns, add terminals, set sizes, and save. |
 | **Towelwise: Restore Layout** | `Alt+Shift+L` | Puts everything back where your saved layout says, in any project. Not while hyperspace is on. |
 | **Towelwise: Open PowerShell**, **Command Prompt**, **Git Bash**, and more | | Opens a shell in a normal window outside the IDE, starting in your project folder. The Admin entries show Windows' own permission prompt. PowerShell 7 and WSL show only where installed. Windows only. |
@@ -20,7 +20,7 @@ New here? Open **Help > Welcome > Get Started with Towelwise**. In Towelwise AI,
 
 Search for `towelwise` in Settings.
 
-- `towelwise.hyperspace.*`: what hyperspace hides (activity bar, status bar, menu bar, command palette box, layout buttons, side bars, bottom panel), optional full screen, and the `sizes` and `editorGrid` it applies. **Edit Hyperspace Layout** sets these for you. Start from a windowed window if you turn full screen on.
+- `towelwise.hyperspace.*`: what hyperspace hides (activity bar, status bar, menu bar, command palette box, layout buttons, side bars, bottom panel), optional full screen, and, when no layout is saved, the `sizes` and `editorGrid` it applies. **Edit Hyperspace Layout** sets these for you. With a layout saved, hyperspace never hides an area the layout puts an agent in, and it applies the layout's sizes and editor grid instead of `sizes` and `editorGrid`. Start from a windowed window if you turn full screen on.
 - `towelwise.layout.agents`, `towelwise.layout.grid`, `towelwise.layout.sizes`: your layout. Set them with **Towelwise: Choose Layout**. **Restore Layout** moves each agent to its place, builds the editor columns and sets the sizes. It never closes a tab. If an agent is also open as an editor tab, it tells you and offers to close that tab. Once `agents` is set, `towelwise.layout.containers` and `towelwise.layout.commands` are ignored.
 - `towelwise.layout.applyOnStartup`: apply your layout when a window opens, once its editors have restored, as Restore Layout does. On by default. It is skipped while hyperspace is on. Without a layout saved with Choose Layout, it applies only the older `containers` list, quietly.
 - `towelwise.layout.commands`: command ids to run after your panels when you restore, for agents that open as an editor tab instead of a side bar. Type the ids yourself; Towelwise cannot see which tabs are open, so a command that opens a new tab each time can duplicate one.
