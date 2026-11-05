@@ -7,8 +7,8 @@ Towelwise helps you focus on the AI coding agents you already use. It only opens
 | Command | Default key | What it does |
 | --- | --- | --- |
 | **Towelwise: Jump to Hyperspace** | `Alt+Shift+J` | Hides the parts of the window you choose, leaving your agents in view. Run it again to put your settings back exactly. |
-| **Towelwise: Choose Layout** | | Pick the agent panels you want showing. |
-| **Towelwise: Restore Layout** | `Alt+Shift+L` | Reopens your chosen panels, in any project. |
+| **Towelwise: Choose Layout** | | Choose your agents, where each lives (a side bar, the bottom panel, or a column), build the editor columns, and save. |
+| **Towelwise: Restore Layout** | `Alt+Shift+L` | Puts everything back where your saved layout says, in any project. |
 
 New here? Open **Help > Welcome > Get Started with Towelwise**.
 
@@ -16,7 +16,8 @@ New here? Open **Help > Welcome > Get Started with Towelwise**.
 
 Search for `towelwise` in Settings.
 
-- `towelwise.hyperspace.*`: what hyperspace hides (activity bar, status bar, menu bar, side bars, bottom panel), and optional full screen. Start from a windowed window if you turn full screen on.
+- `towelwise.hyperspace.*`: what hyperspace hides (activity bar, status bar, menu bar, command palette box, layout buttons, side bars, bottom panel), and optional full screen. Start from a windowed window if you turn full screen on.
+- `towelwise.layout.agents`, `towelwise.layout.grid`, `towelwise.layout.sizes`: your layout. Set them with **Towelwise: Choose Layout**; **Restore Layout** moves each agent to its place, builds the editor columns and sets the sizes. It never closes a tab. If an agent is also open as an editor tab, it tells you and offers to close that tab. Once `agents` is set, `towelwise.layout.containers` and `towelwise.layout.commands` are ignored.
 - `towelwise.layout.applyOnStartup`: also apply your layout when a window opens. Off by default.
 - `towelwise.layout.commands`: command ids to run after your panels when you restore, for agents that open as an editor tab instead of a side bar. Type the ids yourself; Towelwise cannot see which tabs are open, so a command that opens a new tab each time can duplicate one.
 

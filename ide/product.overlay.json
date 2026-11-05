@@ -1,0 +1,34 @@
+{
+  "nameShort": "Towelwise AI",
+  "nameLong": "Towelwise AI",
+  "applicationName": "towelwise-ai",
+  "dataFolderName": ".towelwise-ai",
+  "linuxIconName": "towelwise-ai",
+  "urlProtocol": "towelwise-ai",
+  "serverApplicationName": "towelwise-ai-server",
+  "serverDataFolderName": ".towelwise-ai-server",
+  "tunnelApplicationName": "towelwise-ai-tunnel",
+  "darwinBundleIdentifier": "com.towelwise.ai",
+  "win32AppUserModelId": "Towelwise.TowelwiseAI",
+  "win32DirName": "Towelwise AI",
+  "win32MutexName": "towelwiseai",
+  "win32NameVersion": "Towelwise AI",
+  "win32RegValueName": "TowelwiseAI",
+  "win32ShellNameShort": "Towelwise AI",
+  "win32TunnelServiceMutex": "towelwiseai-tunnelservice",
+  "win32TunnelMutex": "towelwiseai-tunnel",
+  "win32AppId": "{{A1456734-9365-4999-84DD-825D3C208E3F}",
+  "win32x64AppId": "{{443207FF-4F23-4AF6-AFAB-D59FFEFA4AB1}",
+  "win32arm64AppId": "{{5347B218-4D2A-42D2-831F-3ECC4580A8DE}",
+  "win32UserAppId": "{{CC3EA919-F68D-4BED-8E9C-C11077C6792B}",
+  "win32x64UserAppId": "{{7246084B-5038-4960-9ED8-9F1725ED3A65}",
+  "win32arm64UserAppId": "{{B7D3F634-5B39-4F93-91D9-09C72EAD6291}",
+  "win32ContextMenu": {
+    "x64": {
+      "clsid": "8681E5A3-B126-4FB6-AB93-955345BEBFE2"
+    },
+    "arm64": {
+      "clsid": "D77DE83F-C11C-4235-8C33-1127CE5D88EB"
+    }
+  }
+}

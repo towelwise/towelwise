@@ -1,0 +1,4 @@
+# Scripts and env files that bash reads must keep LF, whatever core.autocrlf says.
+*.sh text eol=lf
+ide/upstream.env text eol=lf
+ide/patches/*.patch -text

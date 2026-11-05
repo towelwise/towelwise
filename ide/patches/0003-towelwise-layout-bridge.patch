@@ -1,0 +1,133 @@
+diff --git a/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts b/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts
+new file mode 100644
+index 0000000..0eea66b
+--- /dev/null
++++ b/src/vs/workbench/contrib/towelwise/browser/layoutBridge.contribution.ts
+@@ -0,0 +1,116 @@
++/*---------------------------------------------------------------------------------------------
++ *  Towelwise AI: a bridge that lets the built-in Towelwise extension read and set the sizes of the side bars
++ *  and the panel, move a view container between the side bars and the panel, and work on the main window's editor
++ *  groups when other editor windows are open. It holds no feature logic: it reports the layout service's state, sets
++ *  one size, says where a container lives or moves it, counts the main window's editor groups, and brings the main
++ *  window to the front.
++ *  The leading underscore keeps the commands out of the Command Palette; it is not an access boundary.
++ *--------------------------------------------------------------------------------------------*/
++
++import { timeout } from '../../../../base/common/async.js';
++import { mainWindow } from '../../../../base/browser/window.js';
++import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
++import { FocusMode } from '../../../../platform/native/common/native.js';
++import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
++import { IHostService } from '../../../services/host/browser/host.js';
++import { IPaneCompositePartService } from '../../../services/panecomposite/browser/panecomposite.js';
++import { IViewDescriptorService, ViewContainerLocation, ViewContainerLocationToString } from '../../../common/views.js';
++import { IWorkbenchLayoutService, Parts, SINGLE_WINDOW_PARTS, isHorizontal, positionToString } from '../../../services/layout/browser/layoutService.js';
++
++const PARTS: { [name: string]: SINGLE_WINDOW_PARTS } = {
++	sidebar: Parts.SIDEBAR_PART,
++	auxiliarybar: Parts.AUXILIARYBAR_PART,
++	panel: Parts.PANEL_PART
++};
++
++const LOCATIONS: { [name: string]: ViewContainerLocation } = {
++	sidebar: ViewContainerLocation.Sidebar,
++	auxiliarybar: ViewContainerLocation.AuxiliaryBar,
++	panel: ViewContainerLocation.Panel
++};
++
++// The active container in an area: its id and its view container's title, if both can be found.
++function activeContainer(name: string, visible: boolean, panes: IPaneCompositePartService, views: IViewDescriptorService): { id: string; title: string } | undefined {
++	if (!visible) {
++		return undefined;
++	}
++	const id = panes.getActivePaneComposite(LOCATIONS[name])?.getId();
++	const title = id ? views.getViewContainerById(id)?.title.value : undefined;
++	return id && title ? { id, title } : undefined;
++}
++
++// The accessor belongs to the window that ran the command, so these always act on that main window.
++CommandsRegistry.registerCommand('_towelwise.layout.state', accessor => {
++	const layout = accessor.get(IWorkbenchLayoutService);
++	const panes = accessor.get(IPaneCompositePartService);
++	const views = accessor.get(IViewDescriptorService);
++	const parts: { [name: string]: { visible: boolean; size: number; container?: { id: string; title: string } } } = {};
++	const position = layout.getPanelPosition();
++	for (const [name, part] of Object.entries(PARTS)) {
++		const visible = layout.isVisible(part);
++		const size = layout.getSize(part);
++		parts[name] = { visible, size: name === 'panel' && isHorizontal(position) ? size.height : size.width, container: activeContainer(name, visible, panes, views) };
++	}
++	const { width, height } = layout.mainContainerDimension;
++	return { window: { width, height }, panelPosition: positionToString(position), parts };
++});
++
++// Sets one part's size along its one sizing dimension (the panel's by its position, as resizePart does).
++// Returns the size the grid ended up with, which may differ from the request (minimum sizes, neighbours).
++CommandsRegistry.registerCommand('_towelwise.layout.setSize', (accessor, name: unknown, pixels: unknown) => {
++	const part = typeof name === 'string' && Object.prototype.hasOwnProperty.call(PARTS, name) ? PARTS[name] : undefined;
++	if (part === undefined || typeof pixels !== 'number' || !Number.isFinite(pixels) || pixels < 0) {
++		throw new Error('_towelwise.layout.setSize needs a part (sidebar, auxiliarybar or panel) and a size in pixels');
++	}
++	const layout = accessor.get(IWorkbenchLayoutService);
++	const current = layout.getSize(part);
++	const alongHeight = part === Parts.PANEL_PART && isHorizontal(layout.getPanelPosition());
++	layout.setSize(part, alongHeight ? { width: current.width, height: Math.round(pixels) } : { width: Math.round(pixels), height: current.height });
++	const after = layout.getSize(part);
++	return alongHeight ? after.height : after.width;
++});
++
++// Where a view container lives now ('sidebar', 'auxiliarybar' or 'panel'), or undefined if this window has no such container.
++CommandsRegistry.registerCommand('_towelwise.layout.locate', (accessor, id: unknown) => {
++	const views = accessor.get(IViewDescriptorService);
++	const container = typeof id === 'string' ? views.getViewContainerById(id) : null;
++	const location = container ? views.getViewContainerLocation(container) : null;
++	return location === null ? undefined : ViewContainerLocationToString(location);
++});
++
++// Moves a view container to another area: the call dragging its icon makes. False if it does not exist or cannot move.
++CommandsRegistry.registerCommand('_towelwise.layout.moveContainer', (accessor, id: unknown, location: unknown) => {
++	const target = typeof location === 'string' && Object.prototype.hasOwnProperty.call(LOCATIONS, location) ? LOCATIONS[location] : undefined;
++	if (target === undefined) {
++		throw new Error('_towelwise.layout.moveContainer needs a container id and a location (sidebar, auxiliarybar or panel)');
++	}
++	const views = accessor.get(IViewDescriptorService);
++	const container = typeof id === 'string' ? views.getViewContainerById(id) : null;
++	if (!container || !views.canMoveViews()) {
++		return false;
++	}
++	views.moveViewContainerToLocation(container, target, undefined, 'towelwise');
++	return views.getViewContainerLocation(container) === target;
++});
++
++// The main window's editor group count. Groups are numbered across windows main window first, so the main window's
++// groups are view columns 1 to this count.
++CommandsRegistry.registerCommand('_towelwise.layout.mainGroupCount', accessor => accessor.get(IEditorGroupsService).mainPart.count);
++
++// Brings the main window to the front and focuses its active editor group, so the commands that act on the active
++// editor window (setting the editor grid, focusing groups, moving tabs) act on the main window. True once the main
++// window's editor part is the active one; false if it does not become active within about a second.
++CommandsRegistry.registerCommand('_towelwise.layout.focusMain', async accessor => {
++	const groups = accessor.get(IEditorGroupsService);
++	const host = accessor.get(IHostService);
++	const isMain = () => groups.getPart(groups.activeGroup) === groups.mainPart;
++	if (isMain()) {
++		return true;
++	}
++	await host.focus(mainWindow, { mode: FocusMode.Force });
++	groups.mainPart.activeGroup.focus();
++	for (let i = 0; i < 20 && !isMain(); i++) {
++		await timeout(50);
++	}
++	return isMain();
++});
+diff --git a/src/vs/workbench/workbench.common.main.ts b/src/vs/workbench/workbench.common.main.ts
+index dcaa486..dcbd623 100644
+--- a/src/vs/workbench/workbench.common.main.ts
++++ b/src/vs/workbench/workbench.common.main.ts
+@@ -482,5 +482,6 @@ import './contrib/opener/browser/opener.contribution.js';
+ 
+ // Towelwise AI
+ import './contrib/towelwise/browser/towelwise.contribution.js';
++import './contrib/towelwise/browser/layoutBridge.contribution.js';
+ 
+ //#endregion

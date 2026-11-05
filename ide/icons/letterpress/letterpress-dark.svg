@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none">
+  <title>Towelwise AI</title>
+  <g opacity="0.3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 10C12.2 7.8 15 8.5 18.2 6C19.8 9 20.5 12 20 15.2C16.8 17.4 14 16.8 10.8 19.2C11.2 16 10.5 13 9 10Z" fill="#B2B2B2"/>
+    <path d="M2.5 14L6.8 11.2M3.5 18.8L8.2 15.8" stroke="#B2B2B2" stroke-width="1.7"/>
+  </g>
+</svg>

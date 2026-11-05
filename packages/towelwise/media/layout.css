@@ -1,0 +1,343 @@
+body {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  padding: 16px 24px;
+  max-width: 880px;
+}
+
+h1 {
+  font-size: 1.4em;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+h2 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 28px 0 6px;
+}
+
+.intro,
+.hint,
+.note {
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.5;
+}
+
+.note {
+  margin: 6px 0;
+}
+
+button,
+select,
+input {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--vscode-contrastBorder, transparent);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+input {
+  cursor: text;
+  width: 5em;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border-color: var(--vscode-input-border, transparent);
+}
+
+button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+button.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+button.primary:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+button.small {
+  padding: 1px 6px;
+  font-size: 0.9em;
+}
+
+/* One row per agent: its name, then the places it can live. */
+.agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.agent .name {
+  width: 7em;
+  font-weight: 600;
+}
+
+.place {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.place[aria-pressed='true'] {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+/* A tiny window drawn with borders: the filled strip shows where the place is. */
+.glyph {
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 14px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+
+.glyph::before {
+  content: '';
+  position: absolute;
+  background: currentColor;
+  opacity: 0.8;
+}
+
+.glyph.left::before {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+}
+
+.glyph.right::before {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+}
+
+.glyph.panel::before {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5px;
+}
+
+.glyph.column::before {
+  left: 7px;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+}
+
+.glyph.none::before {
+  display: none;
+}
+
+/* The editor columns: columns side by side, each split into rows. Sizes come from the draft as flex-grow. */
+.grid-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.columns {
+  display: flex;
+  flex: 1;
+  height: 260px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  flex-basis: 0;
+  min-width: 0;
+}
+
+.rows {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  flex-basis: 0;
+  min-height: 0;
+  gap: 4px;
+  padding: 6px;
+  border: 1px dashed var(--vscode-panel-border);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.cell.filled {
+  border-style: solid;
+  border-color: var(--vscode-focusBorder);
+}
+
+.cell select {
+  width: 100%;
+  min-width: 0;
+}
+
+/* A dropdown's closed face and its open list both use the editor's dropdown colours, so the list is
+   readable in light and dark themes (the default list is the system's white with the theme's text). */
+select {
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border-color: var(--vscode-dropdown-border, transparent);
+}
+
+select option {
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-listBackground, var(--vscode-dropdown-background));
+}
+
+/* A terminal cell's one-line summary; its fields are in the Terminal cells block under the grid. */
+.cell .summary {
+  font-size: 0.9em;
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminals {
+  margin: 12px 0;
+}
+
+.terminals h3 {
+  margin: 0 0 4px;
+  font-size: 1em;
+}
+
+.terminals .terminal {
+  padding: 8px 10px;
+  margin: 6px 0;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+}
+
+.terminals .where {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* Shell, name, folder and command side by side, wrapping onto more lines in a narrow window. */
+.terminals .fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 12px;
+}
+
+.terminals .fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.terminals .fields input,
+.terminals .fields select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cell .tools,
+.col .tools {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.col .tools {
+  margin-bottom: 4px;
+}
+
+/* The draggable edges between columns and between rows. */
+.vsplit,
+.hsplit {
+  flex: none;
+  background: var(--vscode-panel-border);
+  border-radius: 2px;
+  touch-action: none;
+}
+
+.vsplit {
+  width: 6px;
+  cursor: col-resize;
+  margin: 0 2px;
+}
+
+.hsplit {
+  height: 6px;
+  cursor: row-resize;
+  margin: 2px 0;
+}
+
+.vsplit:hover,
+.hsplit:hover,
+.dragging {
+  background: var(--vscode-focusBorder);
+}
+
+.edge {
+  align-self: center;
+}
+
+.sizes label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 18px 6px 0;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 28px 0 8px;
+}
+
+.result {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--vscode-focusBorder);
+  background: var(--vscode-editorWidget-background);
+  line-height: 1.5;
+}
+
+.result.bad {
+  border-left-color: var(--vscode-errorForeground);
+}
+
+.result .actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

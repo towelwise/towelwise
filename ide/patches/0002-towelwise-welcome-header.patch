@@ -1,0 +1,35 @@
+diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts
+index 5742aca..4babb2f 100644
+--- a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts
++++ b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.ts
+@@ -933,7 +933,7 @@ export class GettingStartedPage extends EditorPane {
+ 
+ 		const header = $('.header', {},
+ 			$('h1.product-name.caption', {}, this.productService.nameLong),
+-			$('p.subtitle.description', {}, localize({ key: 'gettingStarted.editingEvolved', comment: ['Shown as subtitle on the Welcome page.'] }, "Editing evolved"))
++			$('p.subtitle.description', {}, localize({ key: 'gettingStarted.editingEvolved', comment: ['Shown as subtitle on the Welcome page.'] }, "Coding Gone Hyper"))
+ 		);
+ 
+ 		const leftColumn = $('.categories-column.categories-column-left', {},);
+diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/browser/media/gettingStarted.css b/src/vs/workbench/contrib/welcomeGettingStarted/browser/media/gettingStarted.css
+index bb57213..aae8ef6 100644
+--- a/src/vs/workbench/contrib/welcomeGettingStarted/browser/media/gettingStarted.css
++++ b/src/vs/workbench/contrib/welcomeGettingStarted/browser/media/gettingStarted.css
+@@ -177,6 +177,17 @@
+ 	align-self: end;
+ }
+ 
++/* Towelwise AI: the mark beside the product name on the Welcome page. */
++.monaco-workbench .part.editor > .content .gettingStartedContainer .gettingStartedSlideCategories > .gettingStartedCategoriesContainer > .header .product-name::before {
++	content: "";
++	display: inline-block;
++	width: 1.1em;
++	height: 1.1em;
++	margin-right: 0.35em;
++	vertical-align: -0.15em;
++	background: url("./towelwise-mark.svg") center / contain no-repeat;
++}
++
+ .monaco-workbench .part.editor > .content .gettingStartedContainer .gettingStartedSlideCategories > .gettingStartedCategoriesContainer > .footer {
+ 	grid-area: footer;
+ 	justify-self: center;

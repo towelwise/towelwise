@@ -42,12 +42,48 @@
         "title": "Towelwise: Jump to Hyperspace"
       },
       {
+        "command": "towelwise.hyperspace.edit",
+        "title": "Towelwise: Edit Hyperspace Layout"
+      },
+      {
         "command": "towelwise.layout.choose",
         "title": "Towelwise: Choose Layout"
       },
       {
         "command": "towelwise.layout.restore",
         "title": "Towelwise: Restore Layout"
+      },
+      {
+        "command": "towelwise.shell.powershell",
+        "title": "Towelwise: Open PowerShell"
+      },
+      {
+        "command": "towelwise.shell.powershellAdmin",
+        "title": "Towelwise: Open PowerShell (Admin)"
+      },
+      {
+        "command": "towelwise.shell.cmd",
+        "title": "Towelwise: Open Command Prompt"
+      },
+      {
+        "command": "towelwise.shell.cmdAdmin",
+        "title": "Towelwise: Open Command Prompt (Admin)"
+      },
+      {
+        "command": "towelwise.shell.gitbash",
+        "title": "Towelwise: Open Git Bash"
+      },
+      {
+        "command": "towelwise.shell.pwsh",
+        "title": "Towelwise: Open PowerShell 7"
+      },
+      {
+        "command": "towelwise.shell.pwshAdmin",
+        "title": "Towelwise: Open PowerShell 7 (Admin)"
+      },
+      {
+        "command": "towelwise.shell.wsl",
+        "title": "Towelwise: Open WSL"
       }
     ],
     "keybindings": [
@@ -79,6 +115,16 @@
             "default": true,
             "description": "Hide the menu bar in hyperspace."
           },
+          "towelwise.hyperspace.hideCommandCenter": {
+            "type": "boolean",
+            "default": true,
+            "description": "Hide the command palette box in the title bar in hyperspace."
+          },
+          "towelwise.hyperspace.hideLayoutControls": {
+            "type": "boolean",
+            "default": true,
+            "description": "Hide the layout buttons in the title bar in hyperspace."
+          },
           "towelwise.hyperspace.hidePrimarySideBar": {
             "type": "boolean",
             "default": false,
@@ -98,6 +144,28 @@
             "type": "boolean",
             "default": false,
             "description": "Also enter true full screen in hyperspace, and leave it on restore. VS Code cannot report whether the window is already full screen, so start from a windowed window."
+          },
+          "towelwise.hyperspace.sizes": {
+            "type": "object",
+            "default": {},
+            "description": "The widths and heights hyperspace sets, as proportions of the window from 0 to 1: the primary side bar (sidebar) and secondary side bar (auxiliarybar) widths, and the bottom panel (panel) with its orientation (panelOrientation: across when the panel is left or right, down when top or bottom). Set it from Edit Hyperspace Layout. Parts left out keep their size.",
+            "properties": {
+              "sidebar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "auxiliarybar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "panel": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "panelOrientation": { "enum": ["across", "down"] }
+            },
+            "additionalProperties": false
+          },
+          "towelwise.hyperspace.editorGrid": {
+            "type": "object",
+            "default": {},
+            "description": "The editor area's columns and rows that hyperspace re-applies: orientation (0 for columns, 1 for rows) and groups, each with a size as a proportion of its parent, an optional label for the picker, and optional nested groups. Set it with Use current layout in Edit Hyperspace Layout. It only changes proportions; it never opens, closes or moves a tab, and it is left alone if the editor area's columns and rows no longer match.",
+            "properties": {
+              "orientation": { "enum": [0, 1] },
+              "groups": { "type": "array", "items": { "type": "object" } }
+            },
+            "additionalProperties": false
           }
         }
       },
@@ -116,8 +184,43 @@
           "towelwise.layout.applyOnStartup": {
             "type": "boolean",
             "default": false,
-            "description": "Also apply your layout when a window opens. Skipped while hyperspace is on.",
+            "description": "Also apply your layout when a window opens. Skipped while hyperspace is on. This applies only the older container list (`towelwise.layout.containers`); once a layout is saved with Choose Layout, it is skipped.",
             "scope": "application"
+          },
+          "towelwise.layout.agents": {
+            "type": "object",
+            "default": {},
+            "properties": {
+              "claudeCode": { "enum": ["left", "right", "panel", "column"] },
+              "codex": { "enum": ["left", "right", "panel", "column"] }
+            },
+            "additionalProperties": false,
+            "scope": "application",
+            "markdownDescription": "Where each agent lives: `left` or `right` side bar, the bottom `panel`, or a `column` of the editor grid. When this is set, **Towelwise: Restore Layout** moves each agent there and ignores `towelwise.layout.containers` and `towelwise.layout.commands`."
+          },
+          "towelwise.layout.grid": {
+            "type": "object",
+            "default": {},
+            "properties": {
+              "orientation": { "enum": [0, 1] },
+              "groups": { "type": "array", "items": { "type": "object" } }
+            },
+            "additionalProperties": false,
+            "scope": "application",
+            "markdownDescription": "The editor area's grid for your layout: `orientation` (0 for columns) and `groups`, each with a `size` as a proportion of its parent, optional nested `groups`, and what it `holds` (`claudeCode`, `codex` or `terminal`). A `terminal` cell may say which terminal in `terminal`: `shell` (`default`, `powershell`, `pwsh`, `cmd`, `gitbash` or `wsl`), `name`, `folder` (relative to the first workspace folder, or absolute) and a startup `command`, run once when Restore Layout opens it. Every agent placed in a `column` in `towelwise.layout.agents` must be in exactly one cell. **Towelwise: Restore Layout** sets the grid, then puts each agent and terminal in its cell; it never closes a tab."
+          },
+          "towelwise.layout.sizes": {
+            "type": "object",
+            "default": {},
+            "properties": {
+              "sidebar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "auxiliarybar": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "panel": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "panelOrientation": { "enum": ["across", "down"] }
+            },
+            "additionalProperties": false,
+            "scope": "application",
+            "markdownDescription": "Side bar and panel sizes as proportions of the window (0 to 1), applied by **Towelwise: Restore Layout** after the agents are placed. `panel` needs a `panelOrientation`: `down` if the panel is at the bottom or top, `across` if at the left or right."
           },
           "towelwise.layout.commands": {
             "type": "array",
@@ -127,6 +230,122 @@
             "default": [],
             "scope": "application",
             "markdownDescription": "Command ids to run after the containers when you run **Towelwise: Restore Layout**, in order, for panels that are not side bars (for example an agent that opens as an editor tab). Not run by apply on startup. A command that opens a new tab each time can pile up duplicates if the tab is already open."
+          }
+        }
+      },
+      {
+        "title": "Towelwise: Menus",
+        "properties": {
+          "towelwise.menus.hidden": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(menu:[A-Za-z][A-Za-z0-9._-]*|[A-Za-z][A-Za-z0-9._-]*(\\.\\*)?)$",
+              "patternErrorMessage": "Use a command id, a prefix ending in .*, or menu: followed by a menu id."
+            },
+            "default": [],
+            "scope": "application",
+            "markdownDescription": "Commands to hide from the menus, the Command Palette and keyboard shortcuts. Each entry is a command id, or a prefix ending in `.*`. An entry of the form `menu:MenuId` hides the submenu item that opens that menu, such as `menu:MenubarLayoutMenu`, but not the commands inside it. Hidden commands still run when other code calls them. Empty the list to bring everything back. Needs Towelwise AI."
+          },
+          "towelwise.menus.towelwise": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "command",
+                "title"
+              ],
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "The command id to run when the entry is chosen."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "The text shown. Put & before a letter to use it as the shortcut letter."
+                },
+                "group": {
+                  "type": "string",
+                  "description": "Entries with the same group sit together; a change of group draws a separator. Defaults to the previous entry's group."
+                },
+                "when": {
+                  "type": "string",
+                  "description": "A condition (a context-key expression). The entry shows only while it is true."
+                }
+              }
+            },
+            "default": [
+              {
+                "command": "towelwise.hyperspace.toggle",
+                "title": "Jump to Hyperspace",
+                "group": "hyperspace"
+              },
+              {
+                "command": "towelwise.hyperspace.edit",
+                "title": "Edit Hyperspace Layout",
+                "group": "hyperspace"
+              },
+              {
+                "command": "towelwise.layout.choose",
+                "title": "Choose Layout",
+                "group": "layout"
+              },
+              {
+                "command": "towelwise.layout.restore",
+                "title": "Restore Layout",
+                "group": "layout"
+              },
+              {
+                "command": "towelwise.shell.powershell",
+                "title": "PowerShell",
+                "group": "shells",
+                "when": "towelwise.shell.available.powershell"
+              },
+              {
+                "command": "towelwise.shell.powershellAdmin",
+                "title": "PowerShell (Admin)",
+                "group": "shells",
+                "when": "towelwise.shell.available.powershellAdmin"
+              },
+              {
+                "command": "towelwise.shell.cmd",
+                "title": "Command Prompt",
+                "group": "shells",
+                "when": "towelwise.shell.available.cmd"
+              },
+              {
+                "command": "towelwise.shell.cmdAdmin",
+                "title": "Command Prompt (Admin)",
+                "group": "shells",
+                "when": "towelwise.shell.available.cmdAdmin"
+              },
+              {
+                "command": "towelwise.shell.gitbash",
+                "title": "Git Bash",
+                "group": "shells",
+                "when": "towelwise.shell.available.gitbash"
+              },
+              {
+                "command": "towelwise.shell.pwsh",
+                "title": "PowerShell 7",
+                "group": "shells",
+                "when": "towelwise.shell.available.pwsh"
+              },
+              {
+                "command": "towelwise.shell.pwshAdmin",
+                "title": "PowerShell 7 (Admin)",
+                "group": "shells",
+                "when": "towelwise.shell.available.pwshAdmin"
+              },
+              {
+                "command": "towelwise.shell.wsl",
+                "title": "WSL",
+                "group": "shells",
+                "when": "towelwise.shell.available.wsl"
+              }
+            ],
+            "scope": "application",
+            "markdownDescription": "The entries of the Towelwise menu in the menu bar, in order. Each needs a `command` and a `title`; `group` separates sections and `when` shows an entry only while a condition holds. Entries with a mistake are skipped and named in the Towelwise output. Needs Towelwise AI."
           }
         }
       }
@@ -205,6 +424,42 @@
           }
         ]
       }
-    ]
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "towelwise.shell.powershell",
+          "when": "towelwise.shell.available.powershell"
+        },
+        {
+          "command": "towelwise.shell.powershellAdmin",
+          "when": "towelwise.shell.available.powershellAdmin"
+        },
+        {
+          "command": "towelwise.shell.cmd",
+          "when": "towelwise.shell.available.cmd"
+        },
+        {
+          "command": "towelwise.shell.cmdAdmin",
+          "when": "towelwise.shell.available.cmdAdmin"
+        },
+        {
+          "command": "towelwise.shell.gitbash",
+          "when": "towelwise.shell.available.gitbash"
+        },
+        {
+          "command": "towelwise.shell.pwsh",
+          "when": "towelwise.shell.available.pwsh"
+        },
+        {
+          "command": "towelwise.shell.pwshAdmin",
+          "when": "towelwise.shell.available.pwshAdmin"
+        },
+        {
+          "command": "towelwise.shell.wsl",
+          "when": "towelwise.shell.available.wsl"
+        }
+      ]
+    }
   }
 }
