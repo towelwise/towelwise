@@ -25,7 +25,7 @@ This is the working roadmap: the order things get built, and what "done" means f
 | 1 | Set up the workshop | Done |
 | 2 | Extension groundwork (hyperspace, layout, walkthrough) | Done; becomes the built-in extension |
 | 3 | **First build** of Towelwise AI | Done (2026-11-03); the timed upstream update is standing upkeep |
-| 4 | **The layout editor** and locked hyperspace | In progress: sizes, editor-grid layouts and My layout (saving and restoring) work; startup apply and locked hyperspace are next |
+| 4 | **The layout editor** and locked hyperspace | In progress: sizes, editor-grid layouts and My layout (saving, restoring, applying at window start and noticing drift) work; locked hyperspace is next |
 | 5 | The memory experiment (Hindsight on Windows) | Can run alongside Phase 4 |
 | 6 | **Towelwise Recall**: the mailbox, then the Probability Drive | — |
 | 7 | **Towelwise Guide**: fundamentals library first | — |
@@ -93,7 +93,7 @@ A real Towelwise AI app for Windows, with no core patches of our own. See [the s
 
 The first core patch, kept small and careful. This is the headline feature: your UI, your way.
 
-**Where it stands (2026-11-04):** the first core patch (the layout bridge) is in. Sizes work, the Edit Hyperspace Layout picker works, and so do Choose Layout and Restore Layout for agents, editor columns and terminals. Next are applying the layout when a window opens, with a prompt when the window has drifted from it, and then locked hyperspace.
+**Where it stands (2026-11-05):** the first core patch (the layout bridge) is in. Sizes work, the Edit Hyperspace Layout picker works, and so do Choose Layout and Restore Layout for agents, editor columns and terminals. The layout also applies when a window opens, and a prompt appears when the window has drifted from it. Next is locked hyperspace.
 
 **Slice order (owner, 2026-11-03):** sizes first ([spec](.work/specs/phase-4-sizes.md)), then editor-grid layouts, then locked hyperspace. The first-run screen needs no patch and can come at any time. Default keys are close to trivial.
 
