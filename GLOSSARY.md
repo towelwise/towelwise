@@ -20,20 +20,24 @@ _Avoid_: Agent window, chat
 One of the places a panel can sit: the primary side bar, the editor area, the secondary side bar or the bottom panel.
 _Avoid_: Column, part, region
 
+**In use**:
+An area that the layout puts something in: a side bar or the panel holding an agent, or the editor area, which is always in use. Hyperspace never hides an area that is in use.
+_Avoid_: Occupied, active
+
 **Chrome**:
 The parts of the window that frame the areas, such as the activity bar, status bar, title bar and menu bar.
 _Avoid_: UI, decorations
 
 **Layout**:
-The agent panels a person wants showing in the side areas, the same in every project; applying it brings those panels back into view where they already live.
+Where a person wants their agents and terminals in the window: which area each one lives in, the columns and rows of the editor grid, and how much of the window each area takes up. The same in every project; applying it puts each item where it belongs.
 _Avoid_: Arrangement, preset, workspace layout
 
 **Hyperspace layout**:
-A person's saved choice of which areas and chrome are on, and how much of the window each one takes up.
+A person's saved choice of which chrome, and which areas that are not in use, to hide in hyperspace. Everything in use stays, sized as the layout says.
 _Avoid_: Snapshot, profile
 
 **Hyperspace**:
-A temporary state in which the window holds to the person's hyperspace layout and nothing else, until they restore.
+A temporary state in which the window hides what the person chose to hide and keeps the layout's areas in use, until they restore.
 _Avoid_: Focus mode, zen mode
 
 **Restore**:

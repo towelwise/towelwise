@@ -66,6 +66,18 @@ h1 {
   opacity: 1;
 }
 
+/* An area the layout uses: kept, fixed, and drawn like the editor area so it does not look clickable. */
+.part.locked {
+  cursor: default;
+  border-color: var(--vscode-panel-border);
+  border-style: solid;
+  opacity: 1;
+}
+
+.part.locked:hover {
+  outline: none;
+}
+
 .part.editor {
   cursor: default;
   background: var(--vscode-editor-background);

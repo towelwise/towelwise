@@ -36,7 +36,12 @@ suite('hyperspace', () => {
     await config().update(FULL_SCREEN, undefined, vscode.ConfigurationTarget.Global);
     await config().update('towelwise.hyperspace.sizes', undefined, vscode.ConfigurationTarget.Global);
     await config().update('towelwise.hyperspace.editorGrid', undefined, vscode.ConfigurationTarget.Global);
-    await config().update('towelwise.hyperspace.hideBottomPanel', undefined, vscode.ConfigurationTarget.Global);
+    for (const key of ['hidePrimarySideBar', 'hideSecondarySideBar', 'hideBottomPanel']) {
+      await config().update(`towelwise.hyperspace.${key}`, undefined, vscode.ConfigurationTarget.Global);
+    }
+    for (const key of ['towelwise.layout.agents', 'towelwise.layout.sizes', 'towelwise.layout.grid', 'workbench.sideBar.location']) {
+      await config().update(key, undefined, vscode.ConfigurationTarget.Global);
+    }
     await config().update(HIDE_COMMAND_CENTER, undefined, vscode.ConfigurationTarget.Global);
     await config().update(HIDE_LAYOUT_CONTROLS, undefined, vscode.ConfigurationTarget.Global);
     fs.rmSync(storageDir, { recursive: true, force: true });
@@ -573,5 +578,99 @@ suite('hyperspace', () => {
     assert.ok(adjusted.logs.some((l) => /adjusted by up to 15%/.test(l)));
     await toggle(storageDir, adjusted);
     assert.strictEqual(isActive(storageDir), false);
+  });
+
+  // The saved layout (Choose Layout) says which areas hold an agent; hyperspace never hides those.
+  const CLOSE_SIDEBAR = 'workbench.action.closeSidebar';
+  const CLOSE_AUXILIARY = 'workbench.action.closeAuxiliaryBar';
+  const CLOSE_PANEL = 'workbench.action.closePanel';
+  const setting = (key: string, value: unknown) => config().update(key, value, vscode.ConfigurationTarget.Global);
+  const hideAllAreas = async () => {
+    await setting('towelwise.hyperspace.hidePrimarySideBar', true);
+    await setting('towelwise.hyperspace.hideSecondarySideBar', true);
+    await setting('towelwise.hyperspace.hideBottomPanel', true);
+  };
+
+  test('a jump keeps the area a saved agent lives in, whatever its hide setting says, and leaves that setting alone', async () => {
+    await hideAllAreas();
+    await setting('towelwise.layout.agents', { codex: 'right' });
+    const win = fakeWindow('a');
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.ran, [CLOSE_SIDEBAR, CLOSE_PANEL]);
+    assert.strictEqual(config().get('towelwise.hyperspace.hideSecondarySideBar'), true);
+    await toggle(storageDir, win);
+  });
+
+  test('"right" is the primary side bar when the side bar is on the right, and an agent on the panel keeps the panel', async () => {
+    await hideAllAreas();
+    await setting('workbench.sideBar.location', 'right');
+    await setting('towelwise.layout.agents', { codex: 'right', claudeCode: 'panel' });
+    const win = fakeWindow('a');
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.ran, [CLOSE_AUXILIARY]);
+    await toggle(storageDir, win);
+  });
+
+  // With a saved layout, its sizes and grid are the only ones: hyperspace has none of its own then.
+  const layoutColumns = (...sizes: number[]) => ({ orientation: 0, groups: sizes.map((size) => ({ size, holds: 'terminal' })) });
+  const ignoredNote = (logs: string[]) => logs.filter((l) => /a layout is saved/.test(l));
+
+  test('a jump sizes the parts with the layout\'s sizes, ignores the hyperspace sizes, and says so once', async () => {
+    await saveSizes({ sidebar: 0.5, auxiliarybar: 0.5 });
+    await setting('towelwise.layout.agents', { codex: 'right' });
+    await setting('towelwise.layout.sizes', { sidebar: 0.1, auxiliarybar: 0.25 });
+    const win = sizedWindow('a');
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.sets, [['sidebar', 200], ['auxiliarybar', 500]]);
+    assert.strictEqual(ignoredNote(win.logs).length, 1);
+    win.sets.length = 0;
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.sets, [['sidebar', 300], ['auxiliarybar', 400], ['panel', 250]]);
+  });
+
+  test('a saved layout without sizes still takes over: the hyperspace sizes are not applied', async () => {
+    await saveSizes({ sidebar: 0.5 });
+    await setting('towelwise.layout.agents', { codex: 'right' });
+    const win = sizedWindow('a');
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.sets, []);
+    await toggle(storageDir, win);
+  });
+
+  test('a jump applies the layout\'s grid proportions after the sizes, ignores the hyperspace grid, and restore puts the old grid back', async () => {
+    await saveGrid(savedColumns(0.1, 0.1, 0.8));
+    await setting('towelwise.layout.sizes', { sidebar: 0.1 });
+    await setting('towelwise.layout.grid', layoutColumns(0.25, 0.25, 0.5));
+    const win = gridWindow('a', columns(500, 300, 200));
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, [columns(0.25, 0.25, 0.5)]);
+    assert.deepStrictEqual(win.order, ['size:sidebar', 'grid']);
+    win.applied.length = 0;
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, [columns(500, 300, 200)]);
+  });
+
+  test('a layout grid whose columns and rows no longer match the window is left alone, and the person is told', async () => {
+    await setting('towelwise.layout.grid', layoutColumns(0.25, 0.25, 0.5));
+    const win = gridWindow('a', columns(500, 500));
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.applied, []);
+    assert.strictEqual(win.told.length, 1);
+    await toggle(storageDir, win);
+  });
+
+  test('a layout with no agents in the side areas, or no layout at all, hides every area the settings say', async () => {
+    await hideAllAreas();
+    await setting('towelwise.layout.agents', { codex: 'column' });
+    const column = fakeWindow('a');
+    await toggle(storageDir, column);
+    assert.deepStrictEqual(column.ran, [CLOSE_SIDEBAR, CLOSE_AUXILIARY, CLOSE_PANEL]);
+    await toggle(storageDir, column);
+
+    await setting('towelwise.layout.agents', undefined);
+    const none = fakeWindow('a');
+    await toggle(storageDir, none);
+    assert.deepStrictEqual(none.ran, [CLOSE_SIDEBAR, CLOSE_AUXILIARY, CLOSE_PANEL]);
+    await toggle(storageDir, none);
   });
 });

@@ -40,13 +40,16 @@ function render(state) {
   const mock = el('div', 'mock');
   for (const item of state.items.filter((i) => i.kind !== 'switch')) {
     const hide = item.choice === 'hide';
-    const button = el('button', `part ${hide ? 'hide' : 'keep'}`);
+    const button = el('button', `part ${hide ? 'hide' : 'keep'}${item.locked ? ' locked' : ''}`);
     button.dataset.area = AREA[item.option];
     button.dataset.key = item.option;
     button.setAttribute('aria-pressed', String(hide));
+    // An area the layout uses is always kept; disabled, with the reason, so it reads as fixed rather than broken.
+    if (item.locked) button.disabled = true;
     const open = state.names && PART[item.option] ? state.names[PART[item.option]] : undefined;
-    button.setAttribute('aria-label', `${item.label}${open ? ', showing ' + open : ''}: ${hide ? 'hide' : 'keep'}`);
+    button.setAttribute('aria-label', `${item.label}${open ? ', showing ' + open : ''}: ${hide ? 'hide' : 'keep'}${item.locked ? ', locked, ' + item.locked : ''}`);
     button.append(el('span', 'name', item.label), el('span', 'badge', hide ? 'Hide' : 'Keep'));
+    if (item.locked) button.append(el('span', 'note', item.locked));
     if (open) button.append(el('span', 'open', open));
     if (item.overridden) button.append(el('span', 'note', 'set by this project'));
     button.addEventListener('click', () => vscodeApi.postMessage({ type: 'choose', option: item.option, choice: hide ? 'keep' : 'hide' }));
@@ -73,8 +76,20 @@ function render(state) {
   if (full.overridden) label.append(el('span', 'note', 'set by this project'));
   app.append(label);
 
+  // With a saved layout, its sizes and editor grid are the only ones hyperspace uses; they are changed in Choose Layout.
+  if (state.layoutSaved) {
+    const box = el('section', 'sizes');
+    box.append(el('h2', '', 'Sizes and editor grid'));
+    box.append(el('p', 'info', 'Your saved layout sets the sizes and the editor grid, and hyperspace uses them. Change them in Choose Layout.'));
+    const choose = el('button', '', 'Choose Layout');
+    choose.dataset.key = 'chooseLayout';
+    choose.addEventListener('click', () => vscodeApi.postMessage({ type: 'chooseLayout' }));
+    box.append(choose);
+    app.append(box);
+  }
+
   // Sizes: percentages of the window. Typing is sent when the field is committed, so a redraw never eats keystrokes.
-  if (state.sizes) {
+  if (state.sizes && !state.layoutSaved) {
     const box = el('section', 'sizes');
     box.append(el('h2', '', 'Sizes'));
     if (!state.sizes.available) {
@@ -103,7 +118,7 @@ function render(state) {
   }
 
   // Editor grid: captured from the live editor area, shown as nested boxes sized by their proportions.
-  if (state.grid) {
+  if (state.grid && !state.layoutSaved) {
     const box = el('section', 'grid');
     box.append(el('h2', '', 'Editor grid'));
     box.append(el('p', 'legend', 'Arrange the columns and rows in the editor area yourself, drag your agents and terminals into them, then press Use current layout. Hyperspace re-applies the proportions; it never opens or moves anything.'));
@@ -158,12 +173,16 @@ function render(state) {
   const status = el('p', 'status');
   status.setAttribute('role', 'status');
   if (lastResult) {
-    const { written, failed } = lastResult;
+    const { written, failed, skipped } = lastResult;
     if (failed) {
       status.textContent = `Could not save ${labelOf(failed.option)}: ${failed.message}. Your other choices are kept; press Save to try again.`;
       status.className = 'status error';
     } else {
       status.textContent = written.length === 0 ? 'Nothing to save.' : `Saved ${written.length} ${written.length === 1 ? 'change' : 'changes'} to your user settings.`;
+    }
+    // A layout saved meanwhile put an agent there: that choice was dropped, so say which.
+    if (skipped && skipped.length > 0) {
+      status.textContent += ` Not saved, because your layout now uses ${skipped.length === 1 ? 'it' : 'them'}: ${skipped.map((s) => `${labelOf(s.option)} (${s.reason})`).join(', ')}.`;
     }
   }
   app.append(status);

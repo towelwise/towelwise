@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Layout, leafCount, maxDifference, parseLayout, parseSavedGrid, sameShape, toLayout } from './grid';
 import { withLock } from './lock';
+import { agentsByPart, readLayout } from './savedLayout';
 import {
   LayoutState,
   PartName,
@@ -154,10 +155,13 @@ async function jump(storageDir: string, host: Host): Promise<string[]> {
     return { key, had: value !== undefined, value };
   });
   const snapshot: Snapshot = { settings, fullScreen: false, windowId: host.windowId };
+  const saved = readLayout((line) => host.log?.(line));
 
   // Sizes are best effort: a failed read means this jump leaves sizes alone and records none. The sizes are
   // recorded even when none are saved, because hiding areas or full screen can make the grid change the rest.
-  const wanted = parseSizes(options.get<unknown>('sizes'), (line) => host.log?.(line));
+  // With a saved layout, its sizes and grid are the only ones; hyperspace's own apply only when none is saved.
+  if (saved) host.log?.('a layout is saved, so its sizes and editor grid apply and towelwise.hyperspace.sizes and editorGrid are ignored');
+  const wanted = saved ? (saved.sizes ?? {}) : parseSizes(options.get<unknown>('sizes'), (line) => host.log?.(line));
   const sizing = await readState(host);
   if (sizing) snapshot.sizes = record(sizing);
   // The editor grid is recorded the same way, whether or not a grid is saved.
@@ -170,10 +174,11 @@ async function jump(storageDir: string, host: Host): Promise<string[]> {
   for (const { key, hidden } of chrome) {
     await config.update(key, hidden, GLOBAL);
   }
-  for (const { option, command } of AREAS) {
-    if (options.get<boolean>(option)) {
-      await host.run(command);
-    }
+  // An area the saved layout puts an agent in is never closed, whatever its hide setting says; the setting is left as it is.
+  const inUse = agentsByPart(saved, config.get('workbench.sideBar.location') === 'right');
+  const hidden = AREAS.filter(({ option, part }) => options.get<boolean>(option) && inUse[part].length === 0);
+  for (const { command } of hidden) {
+    await host.run(command);
   }
   if (options.get<boolean>('fullScreen')) {
     await host.run(TOGGLE_FULL_SCREEN);
@@ -182,11 +187,11 @@ async function jump(storageDir: string, host: Host): Promise<string[]> {
   }
   // Last, so proportions apply to the window as it now is (after full screen), and with fresh visibility.
   if (sizing && Object.keys(wanted).length > 0) {
-    const kept = new Set(AREAS.filter(({ option }) => !options.get<boolean>(option)).map(({ part }) => part));
+    const kept = new Set(AREAS.filter((area) => !hidden.includes(area)).map(({ part }) => part));
     await applySizes(host, wanted, kept);
   }
   // After the side bars and panel, so the grid's proportions apply to the editor area's final size.
-  const savedGrid = parseSavedGrid(options.get<unknown>('editorGrid'), (line) => host.log?.(line));
+  const savedGrid = saved ? saved.grid : parseSavedGrid(options.get<unknown>('editorGrid'), (line) => host.log?.(line));
   if (savedGrid && leafCount(savedGrid) > 1) await applyGrid(host, savedGrid);
   // A fresh read: `config` above is a snapshot taken before the updates.
   const after = vscode.workspace.getConfiguration();

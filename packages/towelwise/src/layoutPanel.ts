@@ -7,8 +7,9 @@ import { TerminalShell, shellsOn } from './cellTerminal';
 import { LayoutDraft, LayoutEnv, SaveResult, parseLayoutMessage } from './layoutDraft';
 import { liveEditors } from './liveEditors';
 import { withLock } from './lock';
-import { Editors, MyLayout, readSaved } from './myLayout';
+import { Editors, MyLayout } from './myLayout';
 import { pageHtml } from './picker';
+import { readSaved } from './savedLayout';
 import { detectMachine } from './shells';
 import { parseLayoutState } from './sizes';
 
@@ -155,6 +156,13 @@ export async function saveLayoutSettings(values: Values): Promise<void> {
   if (!dir) return writeAll(config(), values);
   const saved = await withLock(dir, async () => (await writeAll(config(), values, layoutRecordPath(dir)), true), false);
   if (!saved) throw new Error('Another Towelwise window is busy with a layout. Try saving again in a moment.');
+}
+
+/** Runs the work while no layout can be saved or restored in any window (the lock saves use); false, without running it, if one is busy. */
+export async function holdLayoutSaves(work: () => Promise<void>): Promise<boolean> {
+  const dir = recordDir;
+  if (!dir) return (await work(), true);
+  return withLock(dir, async () => (await work(), true), false);
 }
 
 // True from the moment the page closes itself for a restore until the page is back. Nothing else opens a page
