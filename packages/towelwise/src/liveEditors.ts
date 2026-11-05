@@ -1,5 +1,8 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Holds, holdsOfTab } from './agents';
+import { withLock } from './lock';
 import { Editors } from './myLayout';
 
 const inputInfo = (tab: vscode.Tab) => {
@@ -113,10 +116,13 @@ async function holdOff(): Promise<boolean> {
   const overridden = inspected?.workspaceValue !== undefined || inspected?.workspaceFolderValue !== undefined;
   if (overridden || !config.get<boolean>(SETTING, true)) return false;
   original = inspected?.globalValue;
+  // Written before the change, so a window that dies mid-restore still leaves what is needed to undo it.
+  writeRecord(original);
   try {
     await config.update(SETTING, false, vscode.ConfigurationTarget.Global);
     return true;
   } catch {
+    removeRecord();
     return false;
   }
 }
@@ -124,6 +130,60 @@ async function holdOff(): Promise<boolean> {
 async function putBack(): Promise<void> {
   // The user's own value again, or no value at all if they had none.
   await vscode.workspace.getConfiguration('workbench.editor').update(SETTING, original, vscode.ConfigurationTarget.Global);
+  removeRecord();
+}
+
+// The user's value, kept on disk while the setting is held off. Left out (undefined) where no folder was given.
+let recordFile: string | undefined;
+const recordPath = (storageDir: string) => path.join(storageDir, 'closeEmptyGroups.held.json');
+
+/** Says where the held setting's record is kept; call once at activation. */
+export function keepHoldRecordIn(storageDir: string | undefined): void {
+  recordFile = storageDir && recordPath(storageDir);
+}
+
+function writeRecord(value: boolean | undefined): void {
+  if (!recordFile) return;
+  try {
+    fs.mkdirSync(path.dirname(recordFile), { recursive: true });
+    fs.writeFileSync(recordFile, JSON.stringify({ had: value !== undefined, value }));
+  } catch {
+    // No record only means a crash would not be undone, as before; the hold itself still works.
+  }
+}
+
+function removeRecord(): void {
+  if (recordFile) fs.rmSync(recordFile, { force: true });
+}
+
+/**
+ * If a window died while it held the setting off, puts the user's value back. Runs under the cross-window lock, so a
+ * hold that is still live in another window is left alone. A setting the user changed since is not overwritten.
+ */
+export async function recoverHeldSetting(storageDir: string, log: (line: string) => void = () => undefined): Promise<boolean> {
+  const file = recordPath(storageDir);
+  if (!fs.existsSync(file)) return false;
+  return withLock(
+    storageDir,
+    async () => {
+      let saved: { had?: unknown; value?: unknown };
+      try {
+        saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+      } catch {
+        fs.rmSync(file, { force: true }); // Unreadable: nothing to restore from.
+        return false;
+      }
+      const config = vscode.workspace.getConfiguration('workbench.editor');
+      if (config.inspect<boolean>(SETTING)?.globalValue === false) {
+        const value = saved.had === true && typeof saved.value === 'boolean' ? saved.value : undefined;
+        await config.update(SETTING, value, vscode.ConfigurationTarget.Global);
+        log(`put closeEmptyGroups back to ${value ?? 'unset'} after a restore was cut short`);
+      }
+      fs.rmSync(file, { force: true });
+      return true;
+    },
+    false,
+  );
 }
 
 /** The editor area of the window this extension runs in, through the tab-groups API and VS Code's own editor commands. */

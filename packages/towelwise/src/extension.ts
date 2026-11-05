@@ -4,7 +4,7 @@ import { isActive, restore, setLog, toggle } from './hyperspace';
 import { applyOnStartup, liveVsCode, restoreLayout } from './layout';
 import { openLayoutPage } from './layoutPanel';
 import { AGENTS } from './agents';
-import { liveEditors } from './liveEditors';
+import { keepHoldRecordIn, liveEditors, recoverHeldSetting } from './liveEditors';
 import { applyLayoutLocked, closeAgentTabs, liveHost, readLayout } from './myLayout';
 import { logMenuProblems } from './menuEntries';
 import { openPicker } from './pickerPanel';
@@ -110,8 +110,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
+  // A restore cut short (window closed, host died) can leave closeEmptyGroups off; put the user's value back.
+  keepHoldRecordIn(storageDir);
+  void recoverHeldSetting(storageDir, log).then(undefined, showError);
+
   // Quiet on purpose: a missing agent should not nag on every window open.
-  void applyOnStartup(storageDir, () => liveVsCode(log)).then(undefined, showError);
+  void applyOnStartup(storageDir, () => liveVsCode(log), log).then(undefined, showError);
 
   if (isActive(storageDir)) {
     void vscode.window

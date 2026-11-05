@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { PageHost, closeLayoutPage, lockedHold, openLayoutPage } from '../layoutPanel';
+import { PageHost, SettingsSection, closeLayoutPage, lockedHold, openLayoutPage, writeAll } from '../layoutPanel';
 import { withLock } from '../lock';
 
 // The real lock files go in a folder of their own, not the extension's storage.
@@ -309,5 +309,50 @@ suite('layout page, in the real window', () => {
     // The window closes a moment after the page does.
     for (let i = 0; i < 100 && vscode.window.tabGroups.all.length !== 2; i++) await new Promise((resolve) => setTimeout(resolve, 50));
     assert.strictEqual(vscode.window.tabGroups.all.length, 2, 'still two columns after the page closes');
+  });
+});
+
+suite('saving the layout settings', () => {
+  const fake = (failOn?: string) => {
+    const values: Record<string, unknown> = { agents: 'old-agents', grid: undefined, sizes: 'old-sizes' };
+    const section: SettingsSection = {
+      inspect: (key) => ({ globalValue: values[key] }),
+      update: async (key, value) => {
+        if (key === failOn && value !== values[key] && !String(value).startsWith('old')) throw new Error(`${key} is locked`);
+        values[key] = value;
+      },
+    };
+    return { values, section };
+  };
+  const next = { agents: 'new-agents', grid: 'new-grid', sizes: 'new-sizes' };
+
+  test('writes all three', async () => {
+    const { values, section } = fake();
+    await writeAll(section, next);
+    assert.deepStrictEqual(values, { agents: 'new-agents', grid: 'new-grid', sizes: 'new-sizes' });
+  });
+
+  test('a failure on the second puts the first back and still reports the failure', async () => {
+    const { values, section } = fake('grid');
+    await assert.rejects(() => writeAll(section, next), /grid is locked/);
+    assert.deepStrictEqual(values, { agents: 'old-agents', grid: undefined, sizes: 'old-sizes' });
+  });
+
+  test('a failure on the third puts back the first two, including a setting that had no value', async () => {
+    const { values, section } = fake('sizes');
+    await assert.rejects(() => writeAll(section, next), /sizes is locked/);
+    assert.deepStrictEqual(values, { agents: 'old-agents', grid: undefined, sizes: 'old-sizes' });
+  });
+
+  test('a failure while putting back does not hide the original failure', async () => {
+    const { section } = fake('grid');
+    const failing: SettingsSection = {
+      inspect: section.inspect,
+      update: async (key, value, target) => {
+        if (String(value).startsWith('old')) throw new Error('cannot undo');
+        return section.update(key, value, target);
+      },
+    };
+    await assert.rejects(() => writeAll(failing, next), /grid is locked/);
   });
 });

@@ -1,7 +1,10 @@
 import * as assert from 'node:assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { liveEditors, setMainGroupCount } from '../liveEditors';
+import { keepHoldRecordIn, liveEditors, recoverHeldSetting, setMainGroupCount } from '../liveEditors';
+import { withLock } from '../lock';
 
 // These run against the real editor area of the test window: the adapter is what the built app uses.
 const settings = () => vscode.workspace.getConfiguration('workbench.editor');
@@ -74,6 +77,78 @@ suite('live editors', () => {
       await setGlobal(false);
       await liveEditors.keepEmptyGroups(async () => undefined);
       assert.strictEqual(globalValue(), false);
+    });
+  });
+
+  suite('after a restore cut short', () => {
+    let dir: string;
+    let pending: { release: () => void; done: Promise<unknown> } | undefined;
+    const record = () => path.join(dir, 'closeEmptyGroups.held.json');
+    setup(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-held-'));
+      keepHoldRecordIn(dir);
+    });
+    teardown(async () => {
+      // Let the pretend-dead hold end, so the next test does not join it.
+      pending?.release();
+      await pending?.done;
+      pending = undefined;
+      keepHoldRecordIn(undefined);
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    // A window that dies mid-restore never reaches its finally block; the setting is off and the record is what is left.
+    const crashDuringHold = async (before: boolean | undefined) => {
+      await setGlobal(before);
+      const stuck = gate();
+      pending = { release: stuck.release, done: liveEditors.keepEmptyGroups(() => stuck.promise) };
+      await until(() => settings().get('closeEmptyGroups') === false && fs.existsSync(record()), 'the hold');
+      // Not released until teardown: until then the window has "died".
+    };
+
+    test('a finished hold leaves no record behind', async () => {
+      await setGlobal(undefined);
+      await liveEditors.keepEmptyGroups(async () => {
+        assert.ok(fs.existsSync(record()), 'the value is on disk while the setting is held off');
+      });
+      assert.ok(!fs.existsSync(record()));
+    });
+
+    test('the next start puts back the value the user had', async () => {
+      await crashDuringHold(true);
+      assert.strictEqual(await recoverHeldSetting(dir), true);
+      assert.strictEqual(globalValue(), true);
+      assert.ok(!fs.existsSync(record()));
+    });
+
+    test('and puts back "no value" when the user had none', async () => {
+      await crashDuringHold(undefined);
+      await recoverHeldSetting(dir);
+      assert.strictEqual(globalValue(), undefined);
+    });
+
+    test('a value the user changed since is not overwritten', async () => {
+      await crashDuringHold(true);
+      await setGlobal(true);
+      await recoverHeldSetting(dir);
+      assert.strictEqual(globalValue(), true);
+      assert.ok(!fs.existsSync(record()));
+    });
+
+    test('a hold that is still live elsewhere is left alone', async () => {
+      await crashDuringHold(true);
+      const outcome = await withLock(dir, () => recoverHeldSetting(dir), true);
+      assert.strictEqual(outcome, false, 'the lock is held, so recovery backs off');
+      assert.strictEqual(globalValue(), false);
+      assert.ok(fs.existsSync(record()));
+    });
+
+    test('an unreadable record is dropped and the setting is left as it is', async () => {
+      await setGlobal(false);
+      fs.writeFileSync(record(), '{not json');
+      assert.strictEqual(await recoverHeldSetting(dir), false);
+      assert.strictEqual(globalValue(), false);
+      assert.ok(!fs.existsSync(record()));
     });
   });
 

@@ -23,12 +23,39 @@ const liveEnv: LayoutEnv = {
       return undefined;
     }
   },
-  write: async ({ agents, grid, sizes }) => {
-    await config().update('agents', agents, vscode.ConfigurationTarget.Global);
-    await config().update('grid', grid, vscode.ConfigurationTarget.Global);
-    await config().update('sizes', sizes, vscode.ConfigurationTarget.Global);
-  },
+  write: (values) => writeAll(config(), values),
 };
+
+/** The slice of a settings section that writeAll uses. */
+export interface SettingsSection {
+  inspect(key: string): { globalValue?: unknown } | undefined;
+  update(key: string, value: unknown, target: vscode.ConfigurationTarget): PromiseLike<void>;
+}
+
+/**
+ * Writes the layout settings one after another. If one fails, the ones already written are put back as they were
+ * (a setting the user had none of is removed), so a failed save never leaves a half-saved mix. The failure still
+ * reaches the caller.
+ */
+export async function writeAll(section: SettingsSection, values: { agents: unknown; grid: unknown; sizes: unknown }): Promise<void> {
+  const done: Array<[string, unknown]> = [];
+  try {
+    for (const key of ['agents', 'grid', 'sizes'] as const) {
+      const before = section.inspect(key)?.globalValue;
+      await section.update(key, values[key], vscode.ConfigurationTarget.Global);
+      done.push([key, before]);
+    }
+  } catch (e) {
+    for (const [key, before] of done.reverse()) {
+      try {
+        await section.update(key, before, vscode.ConfigurationTarget.Global);
+      } catch {
+        // Nothing more can be done for this one; the original failure is the one to report.
+      }
+    }
+    throw e;
+  }
+}
 
 // True from the moment the page closes itself for a restore until the page is back. Nothing else opens a page
 // meanwhile: the restore brings this draft back, and a second page would take its place and lose it.
