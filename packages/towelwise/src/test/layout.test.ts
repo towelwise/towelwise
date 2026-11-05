@@ -178,19 +178,6 @@ suite('layout', () => {
     assert.deepStrictEqual(vs.logged, ['restore layout (containers only, on startup)', 'ran workbench.view.extension.codex (container codex)']);
   });
 
-  test('startup apply says in the log why it did nothing once a layout is saved with Choose Layout', async () => {
-    await config().update(CONTAINERS, ['codex'], GLOBAL);
-    await config().update(ON_STARTUP, true, GLOBAL);
-    await config().update('towelwise.layout.agents', { codex: 'left' }, GLOBAL);
-    const vs = fakeVsCode(['workbench.view.extension.codex']);
-    const logged: string[] = [];
-
-    assert.strictEqual(await applyOnStartup(storageDir, async () => vs, (line) => void logged.push(line)), false);
-    assert.deepStrictEqual(vs.ran, []);
-    assert.strictEqual(logged.length, 1);
-    assert.match(logged[0], /skipped.*Choose Layout/);
-  });
-
   test('a command that fails is logged with its error before the error is reported, and stops Restore', async () => {
     await config().update(COMMANDS, ['agent.openChat', 'agent.later'], GLOBAL);
     const vs = fakeVsCode(['agent.openChat', 'agent.later'], {}, 'agent.openChat');
@@ -207,17 +194,19 @@ suite('layout', () => {
     assert.deepStrictEqual(vs.ran, []);
   });
 
-  test('startup apply runs only when its setting is on and hyperspace is off', async () => {
+  test('startup apply is on unless turned off, and is skipped while hyperspace is on', async () => {
     await config().update(CONTAINERS, ['codex'], GLOBAL);
     const run = async () => {
       const vs = fakeVsCode(['workbench.view.extension.codex']);
       return { applied: await applyOnStartup(storageDir, async () => vs), ran: vs.ran };
     };
 
+    assert.deepStrictEqual(await run(), { applied: true, ran: ['workbench.view.extension.codex'] });
+
+    await config().update(ON_STARTUP, false, GLOBAL);
     assert.deepStrictEqual(await run(), { applied: false, ran: [] });
 
     await config().update(ON_STARTUP, true, GLOBAL);
-    assert.deepStrictEqual(await run(), { applied: true, ran: ['workbench.view.extension.codex'] });
 
     fs.writeFileSync(stateFile(storageDir), '[]'); // hyperspace is on
     assert.deepStrictEqual(await run(), { applied: false, ran: [] });
@@ -238,6 +227,7 @@ suite('layout', () => {
 
   test('startup does not build the VS Code environment when apply on startup is off', async () => {
     let built = 0;
+    await config().update(ON_STARTUP, false, GLOBAL);
     const vs = fakeVsCode(['workbench.view.extension.codex']);
 
     await applyOnStartup(storageDir, async () => (built++, vs));

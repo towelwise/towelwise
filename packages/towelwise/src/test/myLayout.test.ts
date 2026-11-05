@@ -1,9 +1,10 @@
 import * as assert from 'node:assert';
-import { coreContainerId, parseAgents } from '../agents';
+import { AgentId, coreContainerId, parseAgents } from '../agents';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { applyLayout, applyLayoutLocked, layoutInUse, locationFor, MyLayoutHost } from '../myLayout';
+import * as vscode from 'vscode';
+import { applyLayout, applyLayoutLocked, applyLayoutOnStartup, layoutInUse, locationFor, MyLayoutHost, Outcome, reportOutcome } from '../myLayout';
 import { LayoutState } from '../sizes';
 
 const noLog = () => undefined;
@@ -249,6 +250,119 @@ suite('agents and my layout', () => {
       const third = windowWith({ [core]: 'auxiliarybar' });
       assert.notStrictEqual(await applyLayoutLocked(dir, third.host, { agents: { codex: 'left' } }), 'busy');
       assert.ok(third.calls.length > 0);
+    });
+  });
+
+  suite('applying the layout when a window opens', () => {
+    const SETTING = 'towelwise.layout.applyOnStartup';
+    const core = coreContainerId('codexSecondaryViewContainer');
+    const mine = { agents: { codex: 'left' } } as const;
+    let dir: string;
+
+    setup(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'towelwise-'));
+    });
+    teardown(async () => {
+      await vscode.workspace.getConfiguration().update(SETTING, undefined, vscode.ConfigurationTarget.Global);
+    });
+
+    test('is on unless the person turns it off, and then applies the saved layout', async () => {
+      const w = windowWith({ [core]: 'auxiliarybar' });
+      assert.strictEqual(await applyLayoutOnStartup(dir, w.host, mine), true);
+      assert.ok(w.calls.includes(`move ${core} sidebar`));
+    });
+
+    test('does nothing when the setting is off', async () => {
+      await vscode.workspace.getConfiguration().update(SETTING, false, vscode.ConfigurationTarget.Global);
+      const w = windowWith({ [core]: 'auxiliarybar' });
+      assert.strictEqual(await applyLayoutOnStartup(dir, w.host, mine), false);
+      assert.deepStrictEqual(w.calls, []);
+    });
+
+    test('does nothing while hyperspace is on, and says so in the log', async () => {
+      const w = windowWith({ [core]: 'auxiliarybar' }, { hyperspace: true });
+      assert.strictEqual(await applyLayoutOnStartup(dir, w.host, mine), false);
+      assert.deepStrictEqual(w.calls, []);
+      assert.ok(w.logs.some((l) => /hyperspace/.test(l)));
+    });
+
+    test('does nothing while another window is restoring, and says so in the log', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const first = windowWith({ [core]: 'auxiliarybar' });
+      const running = applyLayoutLocked(dir, { ...first.host, run: async () => gate }, mine);
+      const second = windowWith({ [core]: 'auxiliarybar' });
+      assert.strictEqual(await applyLayoutOnStartup(dir, second.host, mine), false);
+      assert.deepStrictEqual(second.calls, []);
+      assert.ok(second.logs.some((l) => /another/.test(l)));
+      release();
+      await running;
+    });
+
+    test('hands what could not be placed, and the second copies open as tabs, to the same report Restore Layout gives', async () => {
+      const w = windowWith({}); // the agent is not installed
+      const reported: Outcome[] = [];
+      assert.strictEqual(await applyLayoutOnStartup(dir, w.host, mine, (outcome) => void reported.push(outcome)), true);
+      assert.strictEqual(reported.length, 1);
+      assert.ok(reported[0].problems.some((p) => /Codex/.test(p)));
+    });
+
+    test('reports nothing when it did not apply', async () => {
+      const reported: Outcome[] = [];
+      const report = (outcome: Outcome) => void reported.push(outcome);
+      await vscode.workspace.getConfiguration().update(SETTING, false, vscode.ConfigurationTarget.Global);
+      await applyLayoutOnStartup(dir, windowWith({}).host, mine, report);
+      await vscode.workspace.getConfiguration().update(SETTING, undefined, vscode.ConfigurationTarget.Global);
+      await applyLayoutOnStartup(dir, windowWith({}, { hyperspace: true }).host, mine, report);
+      assert.deepStrictEqual(reported, []);
+    });
+  });
+
+  suite('reporting what was applied', () => {
+    const outcome = (over: Partial<Outcome> = {}): Outcome => ({ placed: [], problems: [], openAsTab: [], ...over });
+    function ui(press = false) {
+      const told: string[] = [];
+      const offers: { message: string; button: string }[] = [];
+      return {
+        told,
+        offers,
+        ui: {
+          tell: (m: string) => void told.push(m),
+          offer: async (message: string, button: string) => (offers.push({ message, button }), press),
+        },
+      };
+    }
+
+    test('says nothing when everything was placed', async () => {
+      const u = ui();
+      await reportOutcome(outcome({ placed: ['codex'] }), u.ui, async () => undefined);
+      assert.deepStrictEqual([u.told, u.offers], [[], []]);
+    });
+
+    test('names what could not be placed', async () => {
+      const u = ui();
+      await reportOutcome(outcome({ problems: ['Codex: not installed or not available in this window', 'sizes: no room'] }), u.ui, async () => undefined);
+      assert.deepStrictEqual(u.told, ['Towelwise: your layout is applied, except: Codex: not installed or not available in this window; sizes: no room.']);
+    });
+
+    test('tells the person to leave hyperspace first', async () => {
+      const u = ui();
+      await reportOutcome(outcome({ refused: 'hyperspace' }), u.ui, async () => undefined);
+      assert.deepStrictEqual(u.told, ['Towelwise: leave hyperspace first, then restore your layout.']);
+    });
+
+    test('offers to close a second copy open as a tab, and closes it only when the button is pressed', async () => {
+      const closed: AgentId[] = [];
+      const idle = ui(false);
+      await reportOutcome(outcome({ openAsTab: ['claudeCode'] }), idle.ui, async (id) => void closed.push(id));
+      assert.deepStrictEqual(idle.offers, [{ message: 'Towelwise: Claude Code also opens as an editor tab.', button: 'Close it' }]);
+      assert.deepStrictEqual(closed, []);
+
+      const pressed = ui(true);
+      const closedNow: AgentId[] = [];
+      await reportOutcome(outcome({ openAsTab: ['claudeCode', 'codex'] }), pressed.ui, async (id) => void closedNow.push(id));
+      assert.strictEqual(pressed.offers[0].message, 'Towelwise: Claude Code and Codex also open as an editor tab.');
+      assert.deepStrictEqual(closedNow, ['claudeCode', 'codex']);
     });
   });
 

@@ -183,8 +183,8 @@
           },
           "towelwise.layout.applyOnStartup": {
             "type": "boolean",
-            "default": false,
-            "description": "Also apply your layout when a window opens. Skipped while hyperspace is on. This applies only the older container list (`towelwise.layout.containers`); once a layout is saved with Choose Layout, it is skipped.",
+            "default": true,
+            "description": "Apply your layout when a window opens, and say what could not be placed, as Restore Layout does. Skipped while hyperspace is on. Without a layout saved with Choose Layout, only the older container list (`towelwise.layout.containers`) is applied.",
             "scope": "application"
           },
           "towelwise.layout.agents": {
