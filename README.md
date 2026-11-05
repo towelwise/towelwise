@@ -21,11 +21,11 @@ What works today:
 - **Its own app.** Its own name, icon and data folder, side by side with VS Code. Extensions come from Open VSX, and telemetry is off.
 - **Agents.** Claude Code and Codex install, sign in and work in it. Nothing is bundled: you install an agent and sign in yourself.
 - **Jump to hyperspace.** One key hides the parts of the window you chose, and the same key puts your settings back. **Edit Hyperspace Layout** is a clickable mock window for choosing what to keep or hide.
-- **My layout.** **Choose Layout** is a page where you pick your agents, place each in a side bar, the bottom panel or an editor column, set sizes, and add terminals. **Restore Layout** brings it all back, in any project.
+- **My layout.** **Choose Layout** is a page where you pick your agents, place each in a side bar, the bottom panel or an editor column, set sizes, and add terminals. **Restore Layout** brings it all back, in any project. Your layout also applies when a window opens, and if the window drifts from it (you resized or moved things) Towelwise asks whether to save the new arrangement or put the saved one back.
 - **A Towelwise menu**, and a setting that hides any built-in menu entry you do not want.
 - **Shells outside the IDE.** PowerShell, Command Prompt and Git Bash (plus PowerShell 7 and WSL where installed), each starting in your project folder. Administrator entries use Windows' own permission prompt.
 
-Still ahead for the layout editor: applying your layout when a window opens, and locking hyperspace so nothing else opens while it is on.
+Still ahead for the layout editor: locking hyperspace so nothing else opens while it is on.
 
 ## Try it: build from source
 
