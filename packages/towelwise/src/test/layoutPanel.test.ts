@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { PageHost, SettingsSection, closeLayoutPage, lockedHold, openLayoutPage, writeAll } from '../layoutPanel';
+import { PageHost, SettingsSection, closeLayoutPage, layoutRecordPath, lockedHold, openLayoutPage, recoverSavedLayout, writeAll } from '../layoutPanel';
 import { withLock } from '../lock';
 
 // The real lock files go in a folder of their own, not the extension's storage.
@@ -354,5 +354,161 @@ suite('saving the layout settings', () => {
       },
     };
     await assert.rejects(() => writeAll(failing, next), /grid is locked/);
+  });
+});
+
+suite('saving the layout settings, with a record on disk', () => {
+  let dir: string;
+  const record = () => layoutRecordPath(dir);
+  setup(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-saved-'));
+  });
+  teardown(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const old: Record<string, unknown> = { agents: { claude: 'left' }, grid: undefined, sizes: { sidebar: 0.2 } };
+  const next: Record<string, unknown> = { agents: { claude: 'right' }, grid: { orientation: 0 }, sizes: { sidebar: 0.3 } };
+  const asValues = (v: Record<string, unknown>) => v as { agents: unknown; grid: unknown; sizes: unknown };
+
+  const fake = (start: Record<string, unknown>, failWrite: (key: string, value: unknown) => boolean = () => false) => {
+    const values: Record<string, unknown> = { ...start };
+    const writes: string[] = [];
+    const section: SettingsSection = {
+      inspect: (key) => ({ globalValue: values[key] }),
+      update: async (key, value) => {
+        if (failWrite(key, value)) throw new Error(`${key} is locked`);
+        writes.push(key);
+        values[key] = value;
+      },
+    };
+    return { values, writes, section };
+  };
+
+  // The record's own shape for a set of old values.
+  const entries = (values: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v === undefined ? { had: false } : { had: true, value: v }]));
+
+  test('the old values are on disk while the settings are written, and gone after', async () => {
+    const seen: boolean[] = [];
+    const { section } = fake(old);
+    const watching: SettingsSection = {
+      inspect: section.inspect,
+      update: async (k, v, t) => {
+        seen.push(fs.existsSync(record()));
+        return section.update(k, v, t);
+      },
+    };
+    await writeAll(watching, asValues(next), record());
+    assert.deepStrictEqual(seen, [true, true, true]);
+    assert.ok(!fs.existsSync(record()));
+  });
+
+  test('a record that cannot be written stops the save before anything is changed', async () => {
+    const { values, writes, section } = fake(old);
+    const notAFolder = path.join(dir, 'file');
+    fs.writeFileSync(notAFolder, '');
+    await assert.rejects(() => writeAll(section, asValues(next), path.join(notAFolder, 'x.json')));
+    assert.deepStrictEqual(writes, []);
+    assert.deepStrictEqual(values, old);
+  });
+
+  test('a failure that is put right leaves no record', async () => {
+    const { values, section } = fake(old, (k, v) => k === 'sizes' && v === next.sizes);
+    await assert.rejects(() => writeAll(section, asValues(next), record()), /sizes is locked/);
+    assert.deepStrictEqual(values, old);
+    assert.ok(!fs.existsSync(record()));
+  });
+
+  test('a failure that cannot be put right keeps the record, says what could not be put back, and the next start fixes it', async () => {
+    let broken = true;
+    const { values, section } = fake(old, (k, v) => broken && ((k === 'grid' && v === next.grid) || (k === 'agents' && v === old.agents)));
+    await assert.rejects(
+      () => writeAll(section, asValues(next), record()),
+      (e: Error) => /grid is locked/.test(e.message) && /agents/.test(e.message) && /next time/.test(e.message),
+    );
+    assert.deepStrictEqual(values.agents, next.agents, 'the half-saved mix is what is left');
+    assert.ok(fs.existsSync(record()), 'so the old values stay on disk');
+    broken = false;
+    assert.strictEqual(await recoverSavedLayout(dir, section), true);
+    assert.deepStrictEqual(values, old);
+    assert.ok(!fs.existsSync(record()));
+  });
+
+  suite('the next start', () => {
+    // A window that died mid-save: the record is on disk and the settings named here already carry their new values.
+    const diedAfter = (written: string[]) => {
+      const { values, section } = fake(old);
+      fs.writeFileSync(record(), JSON.stringify({ before: entries(old), after: next }));
+      for (const key of written) values[key] = next[key];
+      return { values, section };
+    };
+
+    test('puts back the settings a cut-short save had already written', async () => {
+      const { values, section } = diedAfter(['agents']);
+      assert.strictEqual(await recoverSavedLayout(dir, section), true);
+      assert.deepStrictEqual(values, old);
+      assert.ok(!fs.existsSync(record()));
+    });
+
+    test('a setting that had no value gets none again', async () => {
+      const { values, section } = diedAfter(['agents', 'grid']);
+      await recoverSavedLayout(dir, section);
+      assert.strictEqual(values.grid, undefined);
+      assert.deepStrictEqual(values, old);
+    });
+
+    test('a save that did finish is kept, and only the record is dropped', async () => {
+      const { values, section } = diedAfter(['agents', 'grid', 'sizes']);
+      await recoverSavedLayout(dir, section);
+      assert.deepStrictEqual(values, next);
+      assert.ok(!fs.existsSync(record()));
+    });
+
+    test('a setting the user changed since is left alone', async () => {
+      const { values, section } = diedAfter(['agents', 'grid']);
+      values.agents = { claude: 'bottom' };
+      await recoverSavedLayout(dir, section);
+      assert.deepStrictEqual(values.agents, { claude: 'bottom' });
+      assert.strictEqual(values.grid, undefined, 'the one still carrying the new value is put back');
+      assert.ok(!fs.existsSync(record()));
+    });
+
+    test('a save that is still going in another window is left alone', async () => {
+      const { values, section } = diedAfter(['agents']);
+      const outcome = await withLock(dir, () => recoverSavedLayout(dir, section), true);
+      assert.strictEqual(outcome, false);
+      assert.deepStrictEqual(values.agents, next.agents);
+      assert.ok(fs.existsSync(record()));
+    });
+
+    test('with no record there is nothing to do', async () => {
+      const { values, section } = fake(old);
+      assert.strictEqual(await recoverSavedLayout(dir, section), false);
+      assert.deepStrictEqual(values, old);
+    });
+
+    test('a put-back that fails keeps the record for the start after', async () => {
+      const { values, section } = diedAfter(['agents']);
+      const failing: SettingsSection = { inspect: section.inspect, update: async () => Promise.reject(new Error('still locked')) };
+      await assert.rejects(() => recoverSavedLayout(dir, failing), /still locked/);
+      assert.ok(fs.existsSync(record()));
+      await recoverSavedLayout(dir, section);
+      assert.deepStrictEqual(values, old);
+    });
+
+    for (const [name, text] of [
+      ['not JSON', '{not json'],
+      ['null', 'null'],
+      ['an empty object', '{}'],
+      ['missing a setting', JSON.stringify({ before: { agents: { had: false }, grid: { had: false } }, after: next })],
+      ['with a "had" that is not a flag', JSON.stringify({ before: { agents: { had: 1 }, grid: { had: false }, sizes: { had: false } }, after: next })],
+    ] as const) {
+      test(`a record that is ${name} is dropped and the settings are left as they are`, async () => {
+        const { values, section } = fake(next);
+        fs.writeFileSync(record(), text);
+        assert.strictEqual(await recoverSavedLayout(dir, section), false);
+        assert.deepStrictEqual(values, next);
+        assert.ok(!fs.existsSync(record()));
+      });
+    }
   });
 });

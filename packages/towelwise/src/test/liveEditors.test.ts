@@ -150,6 +150,38 @@ suite('live editors', () => {
       assert.strictEqual(globalValue(), false);
       assert.ok(!fs.existsSync(record()));
     });
+
+    for (const [name, text] of [
+      ['null', 'null'],
+      ['an empty object', '{}'],
+      ['a list', '[true]'],
+      ['a "had" that is not a flag', '{"had":"yes","value":true}'],
+      ['a value that is not a flag', '{"had":true,"value":"x"}'],
+      ['a value missing where one was had', '{"had":true}'],
+    ] as const) {
+      test(`a record that is ${name} is dropped and the setting is left as it is`, async () => {
+        await setGlobal(false);
+        fs.writeFileSync(record(), text);
+        assert.strictEqual(await recoverHeldSetting(dir), false);
+        assert.strictEqual(globalValue(), false);
+        assert.ok(!fs.existsSync(record()));
+      });
+    }
+
+    test('without a saved record the setting is not held off, and the work still runs', async () => {
+      // A file where the folder should be: the record cannot be written.
+      const notAFolder = path.join(dir, 'file');
+      fs.writeFileSync(notAFolder, '');
+      keepHoldRecordIn(notAFolder);
+      await setGlobal(true);
+      let ran = false;
+      await liveEditors.keepEmptyGroups(async () => {
+        ran = true;
+        assert.strictEqual(settings().get('closeEmptyGroups'), true, 'the setting stays as it is');
+      });
+      assert.ok(ran);
+      assert.strictEqual(globalValue(), true);
+    });
   });
 
   suite('holding a group across a change', () => {

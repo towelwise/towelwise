@@ -116,8 +116,9 @@ async function holdOff(): Promise<boolean> {
   const overridden = inspected?.workspaceValue !== undefined || inspected?.workspaceFolderValue !== undefined;
   if (overridden || !config.get<boolean>(SETTING, true)) return false;
   original = inspected?.globalValue;
-  // Written before the change, so a window that dies mid-restore still leaves what is needed to undo it.
-  writeRecord(original);
+  // Written before the change, so a window that dies mid-restore still leaves what is needed to undo it. If it cannot
+  // be written, the setting is not touched: a crash would then leave it off for good.
+  if (!writeRecord(original)) return false;
   try {
     await config.update(SETTING, false, vscode.ConfigurationTarget.Global);
     return true;
@@ -142,15 +143,22 @@ export function keepHoldRecordIn(storageDir: string | undefined): void {
   recordFile = storageDir && recordPath(storageDir);
 }
 
-function writeRecord(value: boolean | undefined): void {
-  if (!recordFile) return;
+/** False if the record could not be written. With no folder given there is nothing to write, and that is fine. */
+function writeRecord(value: boolean | undefined): boolean {
+  if (!recordFile) return true;
   try {
     fs.mkdirSync(path.dirname(recordFile), { recursive: true });
     fs.writeFileSync(recordFile, JSON.stringify({ had: value !== undefined, value }));
+    return true;
   } catch {
-    // No record only means a crash would not be undone, as before; the hold itself still works.
+    return false;
   }
 }
+
+/** A record this code wrote: a flag, and the user's value when the flag says there was one. */
+const isRecord = (r: unknown): r is { had: boolean; value?: boolean } =>
+  typeof r === 'object' && r !== null && typeof (r as { had?: unknown }).had === 'boolean' &&
+  ((r as { had: boolean }).had ? typeof (r as { value?: unknown }).value === 'boolean' : true);
 
 function removeRecord(): void {
   if (recordFile) fs.rmSync(recordFile, { force: true });
@@ -166,16 +174,19 @@ export async function recoverHeldSetting(storageDir: string, log: (line: string)
   return withLock(
     storageDir,
     async () => {
-      let saved: { had?: unknown; value?: unknown };
+      let saved: unknown;
       try {
         saved = JSON.parse(fs.readFileSync(file, 'utf8'));
       } catch {
-        fs.rmSync(file, { force: true }); // Unreadable: nothing to restore from.
+        saved = undefined;
+      }
+      if (!isRecord(saved)) {
+        fs.rmSync(file, { force: true }); // Unreadable or not ours: nothing to restore from, and the setting stays as it is.
         return false;
       }
       const config = vscode.workspace.getConfiguration('workbench.editor');
       if (config.inspect<boolean>(SETTING)?.globalValue === false) {
-        const value = saved.had === true && typeof saved.value === 'boolean' ? saved.value : undefined;
+        const value = saved.had ? saved.value : undefined;
         await config.update(SETTING, value, vscode.ConfigurationTarget.Global);
         log(`put closeEmptyGroups back to ${value ?? 'unset'} after a restore was cut short`);
       }

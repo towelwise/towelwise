@@ -2,7 +2,7 @@ import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { isActive, restore, setLog, toggle } from './hyperspace';
 import { applyOnStartup, liveVsCode, restoreLayout } from './layout';
-import { openLayoutPage } from './layoutPanel';
+import { keepLayoutRecordIn, openLayoutPage, recoverSavedLayout } from './layoutPanel';
 import { AGENTS } from './agents';
 import { keepHoldRecordIn, liveEditors, recoverHeldSetting } from './liveEditors';
 import { applyLayoutLocked, closeAgentTabs, liveHost, readLayout } from './myLayout';
@@ -110,12 +110,16 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // A restore cut short (window closed, host died) can leave closeEmptyGroups off; put the user's value back.
+  // A restore or a save cut short (window closed, host died) can leave closeEmptyGroups off or the layout settings half
+  // written; put the user's values back. One after another: each takes the cross-window lock, and the last reads the layout.
   keepHoldRecordIn(storageDir);
-  void recoverHeldSetting(storageDir, log).then(undefined, showError);
-
-  // Quiet on purpose: a missing agent should not nag on every window open.
-  void applyOnStartup(storageDir, () => liveVsCode(log), log).then(undefined, showError);
+  keepLayoutRecordIn(storageDir);
+  void (async () => {
+    await recoverHeldSetting(storageDir, log).catch(showError);
+    await recoverSavedLayout(storageDir, vscode.workspace.getConfiguration('towelwise.layout'), log).catch(showError);
+    // Quiet on purpose: a missing agent should not nag on every window open.
+    await applyOnStartup(storageDir, () => liveVsCode(log), log).catch(showError);
+  })();
 
   if (isActive(storageDir)) {
     void vscode.window

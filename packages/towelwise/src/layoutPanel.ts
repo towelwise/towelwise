@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import * as vscode from 'vscode';
 import { TerminalShell, shellsOn } from './cellTerminal';
 import { LayoutDraft, LayoutEnv, SaveResult, parseLayoutMessage } from './layoutDraft';
@@ -23,38 +26,131 @@ const liveEnv: LayoutEnv = {
       return undefined;
     }
   },
-  write: (values) => writeAll(config(), values),
+  write: saveSettings,
 };
 
-/** The slice of a settings section that writeAll uses. */
+/** The slice of a settings section that writeAll and recoverSavedLayout use. */
 export interface SettingsSection {
   inspect(key: string): { globalValue?: unknown } | undefined;
   update(key: string, value: unknown, target: vscode.ConfigurationTarget): PromiseLike<void>;
 }
 
+const KEYS = ['agents', 'grid', 'sizes'] as const;
+type Values = { agents: unknown; grid: unknown; sizes: unknown };
+
+/** Where the old layout settings are kept on disk while a save is writing the new ones. */
+export const layoutRecordPath = (storageDir: string): string => path.join(storageDir, 'layout.saving.json');
+
+// Settings go through JSON, so compare them as JSON does: a copy of each, with no regard for key order.
+const jsonCopy = (v: unknown): unknown => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+const same = (a: unknown, b: unknown): boolean => isDeepStrictEqual(jsonCopy(a), jsonCopy(b));
+
 /**
- * Writes the layout settings one after another. If one fails, the ones already written are put back as they were
- * (a setting the user had none of is removed), so a failed save never leaves a half-saved mix. The failure still
- * reaches the caller.
+ * Writes the layout settings one after another. The old values are written to `recordFile` first; if that fails, nothing
+ * is changed. If a setting fails, the ones already written are put back (one the user had none of is removed) and the
+ * record is removed. If some cannot be put back, the record stays, the error says so, and the next start puts them back
+ * (recoverSavedLayout). The original failure always reaches the caller.
  */
-export async function writeAll(section: SettingsSection, values: { agents: unknown; grid: unknown; sizes: unknown }): Promise<void> {
-  const done: Array<[string, unknown]> = [];
+export async function writeAll(section: SettingsSection, values: Values, recordFile?: string): Promise<void> {
+  const before = KEYS.map((key) => section.inspect(key)?.globalValue);
+  if (recordFile) {
+    const old = Object.fromEntries(KEYS.map((key, i) => [key, before[i] === undefined ? { had: false } : { had: true, value: before[i] }]));
+    fs.mkdirSync(path.dirname(recordFile), { recursive: true });
+    fs.writeFileSync(recordFile, JSON.stringify({ before: old, after: values }));
+  }
+  const done: number[] = [];
   try {
-    for (const key of ['agents', 'grid', 'sizes'] as const) {
-      const before = section.inspect(key)?.globalValue;
+    for (const [i, key] of KEYS.entries()) {
       await section.update(key, values[key], vscode.ConfigurationTarget.Global);
-      done.push([key, before]);
+      done.push(i);
     }
   } catch (e) {
-    for (const [key, before] of done.reverse()) {
+    const stuck: string[] = [];
+    for (const i of done.reverse()) {
       try {
-        await section.update(key, before, vscode.ConfigurationTarget.Global);
+        await section.update(KEYS[i], before[i], vscode.ConfigurationTarget.Global);
       } catch {
-        // Nothing more can be done for this one; the original failure is the one to report.
+        stuck.push(KEYS[i]);
       }
     }
-    throw e;
+    if (stuck.length === 0) {
+      if (recordFile) fs.rmSync(recordFile, { force: true });
+      throw e;
+    }
+    const why = e instanceof Error ? e.message : String(e);
+    throw new Error(`${why}. These could not be put back and stay as they were just saved: ${stuck.join(', ')}. They will be put back the next time a window starts.`);
   }
+  // A record left behind here only costs a look at the next start, which finds the save finished and drops it.
+  if (recordFile) fs.rmSync(recordFile, { force: true });
+}
+
+type Entry = { had: boolean; value?: unknown };
+const isEntry = (e: unknown): e is Entry => typeof e === 'object' && e !== null && typeof (e as Entry).had === 'boolean';
+
+/** The record, if it has the whole shape writeAll gives it. */
+function readRecord(file: string): { before: Record<string, Entry>; after: Record<string, unknown> } | undefined {
+  let saved: unknown;
+  try {
+    saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return undefined;
+  }
+  const isObject = (o: unknown): o is Record<string, unknown> => typeof o === 'object' && o !== null && !Array.isArray(o);
+  if (!isObject(saved) || !isObject(saved.before) || !isObject(saved.after)) return undefined;
+  const { before, after } = saved;
+  if (!KEYS.every((key) => isEntry(before[key]) && key in after)) return undefined;
+  return { before: before as Record<string, Entry>, after };
+}
+
+/**
+ * If a window died while saving the layout, puts back the settings it had already changed. Runs under the cross-window
+ * lock, so a save that is still going in another window is left alone. A save that did finish is kept, and a setting the
+ * user changed since is not overwritten. A record that is not whole is dropped without touching any setting.
+ */
+export async function recoverSavedLayout(storageDir: string, section: SettingsSection, log: (line: string) => void = () => undefined): Promise<boolean> {
+  const file = layoutRecordPath(storageDir);
+  if (!fs.existsSync(file)) return false;
+  return withLock(
+    storageDir,
+    async () => {
+      const saved = readRecord(file);
+      if (!saved) {
+        fs.rmSync(file, { force: true });
+        log('dropped a layout save record that could not be read');
+        return false;
+      }
+      const now = KEYS.map((key) => section.inspect(key)?.globalValue);
+      // Every setting carries its new value: the save finished, and only the record was left.
+      if (!KEYS.every((key, i) => same(now[i], saved.after[key]))) {
+        for (const [i, key] of KEYS.entries()) {
+          const old = saved.before[key];
+          const was = old.had ? old.value : undefined;
+          if (same(now[i], saved.after[key]) && !same(now[i], was)) {
+            await section.update(key, was, vscode.ConfigurationTarget.Global);
+            log(`put ${key} back after a layout save was cut short`);
+          }
+        }
+      }
+      fs.rmSync(file, { force: true });
+      return true;
+    },
+    false,
+  );
+}
+
+let recordDir: string | undefined;
+
+/** Says where the save's record is kept; call once at activation. */
+export function keepLayoutRecordIn(storageDir: string | undefined): void {
+  recordDir = storageDir;
+}
+
+// One save at a time across windows, and not while another window restores: recovery treats a record it finds as left over.
+async function saveSettings(values: Values): Promise<void> {
+  const dir = recordDir;
+  if (!dir) return writeAll(config(), values);
+  const saved = await withLock(dir, async () => (await writeAll(config(), values, layoutRecordPath(dir)), true), false);
+  if (!saved) throw new Error('Another Towelwise window is busy with a layout. Try saving again in a moment.');
 }
 
 // True from the moment the page closes itself for a restore until the page is back. Nothing else opens a page
