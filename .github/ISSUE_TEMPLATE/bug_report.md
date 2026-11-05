@@ -10,4 +10,6 @@ labels: bug
 
 **Steps to reproduce**
 
-**Environment** (VS Code version, OS, extension version)
+**Environment** (Towelwise AI version or commit, Windows version; or the VS Code version if you ran the extension on its own)
+
+**Log** (if a layout restore did not do what you expected: Output > Towelwise)
