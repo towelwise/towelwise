@@ -236,6 +236,9 @@ export const liveEditors: Editors = {
       shellPath: open?.shellPath,
       shellArgs: open?.shellArgs,
       cwd: open?.cwd,
+      // Not restored on reload: VS Code brings a revived terminal back under its process's title ("bash"), not this name,
+      // so a restore could not recognise it and would open a second one. The layout opens it again instead.
+      isTransient: true,
       location: { viewColumn: groupOf(group).viewColumn, preserveFocus: true },
     });
     // VS Code holds the text until the shell is ready for it.
@@ -256,6 +259,21 @@ export const liveEditors: Editors = {
       });
     }
   },
+  settled: (ms) =>
+    new Promise<void>((resolve) => {
+      // An empty label is a revived terminal whose name has not been restored yet.
+      const waiting = () => real().some((g) => g.tabs.some((t) => kindOf(t) === 'terminal' && t.label === ''));
+      if (!waiting()) return resolve();
+      const done = () => {
+        clearTimeout(timer);
+        watch.dispose();
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      const watch = vscode.window.tabGroups.onDidChangeTabs(() => {
+        if (!waiting()) done();
+      });
+    }),
   waitForTab: (holds, ms) =>
     new Promise((resolve) => {
       const timer = setTimeout(() => {
