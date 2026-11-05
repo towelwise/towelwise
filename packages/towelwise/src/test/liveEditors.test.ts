@@ -337,6 +337,24 @@ suite('live editors', () => {
     });
   });
 
+  suite('waiting for a revived terminal\'s name', () => {
+    test('returns at once when no terminal tab is missing its name, with or without a terminal open', async () => {
+      const quickly = async () => {
+        const started = Date.now();
+        await liveEditors.settled(5000);
+        assert.ok(Date.now() - started < 1000);
+      };
+      await quickly();
+      const terminal = vscode.window.createTerminal({ name: 'named', location: { viewColumn: vscode.ViewColumn.One } });
+      try {
+        await until(() => vscode.window.tabGroups.all.some((g) => g.tabs.some((t) => t.input instanceof vscode.TabInputTerminal)), 'the terminal tab');
+        await quickly();
+      } finally {
+        terminal.dispose();
+      }
+    });
+  });
+
   suite('groups past the eighth', () => {
     test('can focus the tenth group and move a tab out of it, and the groups stay', async () => {
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');

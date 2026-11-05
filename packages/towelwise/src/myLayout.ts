@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 import { AGENTS, AGENT_IDS, AgentId, AgentPlaces, Holds, Place, coreContainerId, parseAgents } from './agents';
-import { CellTerminal, TerminalOpen, planTerminal, terminalName } from './cellTerminal';
+import { CellTerminal, TerminalOpen, isEmptyTerminal, planTerminal, terminalName } from './cellTerminal';
 import { cellsInOrder, parseLayoutGrid } from './columns';
 import { Layout, SavedGrid, toLayout } from './grid';
 import { Bridge, applySizes, isActive } from './hyperspace';
@@ -53,6 +53,11 @@ export interface Editors {
    * it was. If it cannot be changed the work still runs, and groups close as VS Code decides.
    */
   keepEmptyGroups<T>(run: () => Promise<T>): Promise<T>;
+  /**
+   * Waits, for at most `ms`, until no terminal tab is still waiting for its name: VS Code brings a terminal back after a
+   * reload with an empty name, and restores it a moment later. Returns at once when none is waiting.
+   */
+  settled(ms: number): PromiseLike<unknown>;
   /** Starts listening for a tab of this kind to open, so it is called before the command that opens it. */
   waitForTab(holds: Holds, ms: number): Promise<object | undefined>;
 }
@@ -95,6 +100,8 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // A tab that has not opened by then is not going to.
 const TAB_WAIT_MS = 15000;
+// A revived terminal that has not got its name back by then is not going to.
+const TERMINAL_NAME_WAIT_MS = 5000;
 
 /** Where "left", "right" or "panel" is, given which side the primary side bar is on. A column is not a location. */
 export function locationFor(place: Place, sideBarOnRight: boolean): Location | undefined {
@@ -152,15 +159,36 @@ function findTab(editors: Editors, holds: Holds): { tab: object; group: object }
 }
 
 // A terminal cell already holds its terminal: one with its name, or for a cell saved without a choice of terminal,
-// any terminal. Then restoring again opens nothing and reruns no command.
-async function fillTerminal(host: MyLayoutHost, editors: Editors, terminal: CellTerminal | undefined, target: object): Promise<string[]> {
+// any terminal. Then restoring again opens nothing and reruns no command. A terminal with its name in another group is
+// moved in, unless that group is a cell that wants such a terminal itself (`claimed`): after a reload VS Code brings
+// terminals back in the groups it remembers, which can be off by one from the grid, and opening another would double them.
+async function fillTerminal(host: MyLayoutHost, editors: Editors, terminal: CellTerminal | undefined, target: object, claimed: object[]): Promise<string[]> {
   const terminals = editors.tabs(target).filter((t) => editors.kind(t) === 'terminal');
   if (!terminal) {
     if (terminals.length === 0) await editors.openTerminal(target);
     return [];
   }
   const name = terminalName(terminal);
-  if (terminals.some((t) => editors.label(t) === name)) return [];
+  const named = (t: object) => editors.kind(t) === 'terminal' && editors.label(t) === name;
+  // The terminal already in the cell (true), or one to move in from another group.
+  const find = (): true | object | undefined =>
+    editors.tabs(target).some(named) ||
+    editors
+      .groups()
+      .filter((g) => g !== target && !claimed.includes(g))
+      .flatMap((g) => editors.tabs(g))
+      .find(named);
+  let have = find();
+  if (!have) {
+    // A revived terminal can be there before its name is, so look again once the names have had their moment.
+    await editors.settled(TERMINAL_NAME_WAIT_MS);
+    have = find();
+  }
+  if (have === true) return [];
+  if (have) {
+    await editors.moveTab(have, target);
+    return [];
+  }
   const { open, problems } = await host.planTerminal(terminal);
   await editors.openTerminal(target, open);
   return problems;
@@ -169,8 +197,8 @@ async function fillTerminal(host: MyLayoutHost, editors: Editors, terminal: Cell
 // Puts what a cell should hold in the group `target`, which is held by reference: opening an agent can add a group
 // of its own and shift every number, and the group it leaves closes once empty. Returns the problems; a terminal that
 // fell back to another shell or folder is still in its cell.
-async function fillCell(host: MyLayoutHost, editors: Editors, holds: Holds, terminal: CellTerminal | undefined, target: object): Promise<string[]> {
-  if (holds === 'terminal') return fillTerminal(host, editors, terminal, target);
+async function fillCell(host: MyLayoutHost, editors: Editors, holds: Holds, terminal: CellTerminal | undefined, target: object, claimed: object[]): Promise<string[]> {
+  if (holds === 'terminal') return fillTerminal(host, editors, terminal, target, claimed);
   const problem = await fillAgent(host, editors, holds, target);
   return problem ? [problem] : [];
 }
@@ -230,7 +258,16 @@ async function placeInMainWindow(host: MyLayoutHost, editors: Editors, gridHost:
       if (!holds) continue;
       try {
         await editors.useMainWindow();
-        const found = await fillCell(host, editors, holds, terminal, cells[i]);
+        // Cells whose terminal this one must not take: those that want the same terminal, and those that want any (a cell
+        // saved without a choice is filled by whatever terminal it holds).
+        const sameTerminal = terminal && terminalName(terminal);
+        const claimed = cells.filter(
+          (_, j) =>
+            j !== i &&
+            wanted[j].holds === 'terminal' &&
+            (isEmptyTerminal(wanted[j].terminal) || terminalName(wanted[j].terminal!) === sameTerminal),
+        );
+        const found = await fillCell(host, editors, holds, terminal, cells[i], claimed);
         problems.push(...found);
         if (found.length === 0) host.log(`layout: ${holdsLabel(holds, terminal)} is in cell ${i + 1}`);
       } catch (e) {

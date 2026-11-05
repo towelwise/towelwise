@@ -256,6 +256,21 @@ export const liveEditors: Editors = {
       });
     }
   },
+  settled: (ms) =>
+    new Promise<void>((resolve) => {
+      // An empty label is a revived terminal whose name has not been restored yet.
+      const waiting = () => real().some((g) => g.tabs.some((t) => kindOf(t) === 'terminal' && t.label === ''));
+      if (!waiting()) return resolve();
+      const done = () => {
+        clearTimeout(timer);
+        watch.dispose();
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      const watch = vscode.window.tabGroups.onDidChangeTabs(() => {
+        if (!waiting()) done();
+      });
+    }),
   waitForTab: (holds, ms) =>
     new Promise((resolve) => {
       const timer = setTimeout(() => {

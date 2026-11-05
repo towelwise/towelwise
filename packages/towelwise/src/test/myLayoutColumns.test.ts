@@ -9,6 +9,8 @@ import { LayoutState } from '../sizes';
 interface Tab {
   holds?: Holds;
   label: string;
+  // A revived terminal's name, which VS Code restores a moment after its tab is there: the label is empty until settled() runs.
+  arrives?: string;
 }
 // held: the group has held a tab at some time. VS Code closes a group when its last tab leaves, but a group that never
 // held one (an empty cell the grid just created) stays; the probe on 2026-11-03 showed both.
@@ -126,6 +128,13 @@ function editorWindow(
       }
     },
     waitForTab: (holds) => new Promise((resolve) => waiters.push({ holds, resolve })),
+    settled: async () => {
+      calls.push('settled');
+      for (const t of groups.flatMap((g) => g.tabs)) {
+        if (t.arrives !== undefined) t.label = t.arrives;
+        delete t.arrives;
+      }
+    },
   };
 
   const run = async (command: string) => {
@@ -416,6 +425,70 @@ suite('my layout: columns', () => {
       await applyLayout(empty.host, terminalGrid());
       assert.deepStrictEqual(empty.opens, []);
       assert.ok(empty.calls.includes('terminal in 0'));
+    });
+
+    // VS Code brings terminals back after a reload in the groups it remembers, which can be one off from the saved grid.
+    const twoTerminals = (): MyLayout => ({
+      grid: toSavedGrid([
+        {
+          size: 1,
+          rows: [{ size: 0.2 }, { size: 0.4, holds: 'terminal', terminal: { shell: 'powershell' } }, { size: 0.4, holds: 'terminal', terminal: { shell: 'gitbash' } }],
+        },
+      ]),
+    });
+
+    test('terminals that came back one group early are moved into their cells, not opened again', async () => {
+      const w = editorWindow({ start: [[tab('terminal', 'PowerShell')], [tab('terminal', 'Git Bash')], []] });
+      await applyLayout(w.host, twoTerminals());
+      assert.deepStrictEqual(w.opens, []);
+      assert.deepStrictEqual(w.groups.map((g) => g.tabs.map((t) => t.label)), [[], ['PowerShell'], ['Git Bash']]);
+    });
+
+    test('a terminal in a cell that wants the same terminal is not taken for another cell', async () => {
+      const same = (): MyLayout => ({
+        grid: toSavedGrid([{ size: 1, rows: [{ size: 0.5, holds: 'terminal', terminal: { shell: 'gitbash' } }, { size: 0.5, holds: 'terminal', terminal: { shell: 'gitbash' } }] }]),
+      });
+      const w = editorWindow({ start: [[], [tab('terminal', 'Git Bash')]] });
+      await applyLayout(w.host, same());
+      assert.strictEqual(w.opens.length, 1);
+      assert.deepStrictEqual(w.groups.map((g) => g.tabs.map((t) => t.label)), [['Git Bash'], ['Git Bash']]);
+    });
+
+    test('a terminal of another name is left where it is', async () => {
+      const w = editorWindow({ start: [[], [tab('terminal', 'pwsh')]] });
+      await applyLayout(w.host, terminalGrid({ shell: 'gitbash' }));
+      // The one-cell grid folds the second group into the first; its terminal stays a terminal of its own.
+      assert.deepStrictEqual(w.groups.map((g) => g.tabs.map((t) => t.label)), [['pwsh', 'Git Bash']]);
+      assert.strictEqual(w.opens.length, 1);
+    });
+
+    const noChoiceThenGitBash = (): MyLayout => ({
+      grid: toSavedGrid([{ size: 1, rows: [{ size: 0.5, holds: 'terminal' }, { size: 0.5, holds: 'terminal', terminal: { shell: 'gitbash' } }] }]),
+    });
+    const labels = (w: ReturnType<typeof editorWindow>) => w.groups.map((g) => g.tabs.map((t) => t.label));
+
+    test('the terminal that fills a cell saved without a choice is not taken by a later named cell', async () => {
+      const w = editorWindow({ start: [[tab('terminal', 'Git Bash')], []] });
+      await applyLayout(w.host, noChoiceThenGitBash());
+      assert.deepStrictEqual(labels(w), [['Git Bash'], ['Git Bash']]);
+      assert.strictEqual(w.opens.length, 1);
+      await applyLayout(w.host, noChoiceThenGitBash());
+      assert.deepStrictEqual(labels(w), [['Git Bash'], ['Git Bash']]);
+      assert.strictEqual(w.opens.length, 1);
+    });
+
+    test('a revived terminal whose name has not come back yet is waited for, not opened again', async () => {
+      const w = editorWindow({ start: [[{ holds: 'terminal', label: '', arrives: 'Git Bash' }]] });
+      await applyLayout(w.host, terminalGrid({ shell: 'gitbash', command: 'npm run dev' }));
+      assert.deepStrictEqual(w.opens, []);
+      assert.deepStrictEqual(labels(w), [['Git Bash']]);
+    });
+
+    test('a name that never comes back is waited for only once, and the terminal then opens', async () => {
+      const w = editorWindow({ start: [[{ holds: 'terminal', label: '' }]] });
+      await applyLayout(w.host, terminalGrid({ shell: 'gitbash' }));
+      assert.strictEqual(w.calls.filter((c) => c === 'settled').length, 1);
+      assert.strictEqual(w.opens.length, 1);
     });
 
     test('a shell or folder that fell back is reported, and the terminal is still in its cell', async () => {
