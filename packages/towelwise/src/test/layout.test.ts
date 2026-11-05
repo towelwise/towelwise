@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { stateFile } from '../hyperspace';
-import { applyOnStartup, orderChoices, restoreLayout, viewsByContainer } from '../layout';
+import { applyOnStartup, restoreLayout, viewsByContainer } from '../layout';
 
 const CONTAINERS = 'towelwise.layout.containers';
 const ON_STARTUP = 'towelwise.layout.applyOnStartup';
@@ -41,6 +41,7 @@ suite('layout', () => {
     await config().update(CONTAINERS, undefined, vscode.ConfigurationTarget.Workspace).then(undefined, () => undefined);
     await config().update(ON_STARTUP, undefined, GLOBAL);
     await config().update(COMMANDS, undefined, GLOBAL);
+    await config().update('towelwise.layout.agents', undefined, GLOBAL);
     fs.rmSync(storageDir, { recursive: true, force: true });
   });
 
@@ -114,22 +115,6 @@ suite('layout', () => {
     assert.deepStrictEqual(await restoreLayout(vs), { ran: ['codex'], skipped: [] });
   });
 
-  test('the picker lists saved containers first, in saved order, then the rest', () => {
-    const found = ['a', 'b', 'c'].map((id) => ({ id, label: id.toUpperCase(), description: 'Side bar' }));
-
-    assert.deepStrictEqual(orderChoices(['c', 'a'], found).map((c) => c.id), ['c', 'a', 'b']);
-    assert.deepStrictEqual(orderChoices([], found).map((c) => c.id), ['a', 'b', 'c']);
-  });
-
-  test('a saved container that is no longer installed stays in the picker, marked, so it can be unticked', () => {
-    const found = [{ id: 'a', label: 'A', description: 'Side bar' }];
-
-    assert.deepStrictEqual(orderChoices(['gone', 'a'], found), [
-      { id: 'gone', label: 'gone', description: 'Not installed' },
-      found[0],
-    ]);
-  });
-
   test('Restore also runs the layout commands, after the containers, in order', async () => {
     await config().update(CONTAINERS, ['codex'], GLOBAL);
     await config().update(COMMANDS, ['agent.openChat', 'agent.openPanel'], GLOBAL);
@@ -191,6 +176,19 @@ suite('layout', () => {
 
     await applyOnStartup(storageDir, async () => vs);
     assert.deepStrictEqual(vs.logged, ['restore layout (containers only, on startup)', 'ran workbench.view.extension.codex (container codex)']);
+  });
+
+  test('startup apply says in the log why it did nothing once a layout is saved with Choose Layout', async () => {
+    await config().update(CONTAINERS, ['codex'], GLOBAL);
+    await config().update(ON_STARTUP, true, GLOBAL);
+    await config().update('towelwise.layout.agents', { codex: 'left' }, GLOBAL);
+    const vs = fakeVsCode(['workbench.view.extension.codex']);
+    const logged: string[] = [];
+
+    assert.strictEqual(await applyOnStartup(storageDir, async () => vs, (line) => void logged.push(line)), false);
+    assert.deepStrictEqual(vs.ran, []);
+    assert.strictEqual(logged.length, 1);
+    assert.match(logged[0], /skipped.*Choose Layout/);
   });
 
   test('a command that fails is logged with its error before the error is reported, and stops Restore', async () => {

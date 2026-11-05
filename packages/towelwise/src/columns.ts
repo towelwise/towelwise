@@ -136,7 +136,6 @@ const cell = (size: number, row: Row): SavedNode => ({
   ...(row.holds ? { holds: row.holds } : {}),
   ...(row.terminal ? { terminal: { ...row.terminal } } : {}),
 });
-const row = (size: number, node: SavedNode): Row => cell(size, node);
 
 export const toSavedGrid = (cols: Column[]): SavedGrid => ({
   orientation: 0,
@@ -151,11 +150,11 @@ export function fromSavedGrid(grid: SavedGrid): Column[] | undefined {
   const cols: Column[] = [];
   for (const node of grid.groups) {
     if (!node.groups) {
-      cols.push({ size: node.size, rows: [row(1, node)] });
+      cols.push({ size: node.size, rows: [cell(1, node)] });
       continue;
     }
     if (node.groups.some((r) => r.groups)) return undefined;
-    cols.push({ size: node.size, rows: node.groups.map((r) => row(r.size, r)) });
+    cols.push({ size: node.size, rows: node.groups.map((r) => cell(r.size, r)) });
   }
   return cols;
 }

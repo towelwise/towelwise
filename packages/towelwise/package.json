@@ -184,7 +184,7 @@
           "towelwise.layout.applyOnStartup": {
             "type": "boolean",
             "default": false,
-            "description": "Also apply your layout when a window opens. Skipped while hyperspace is on.",
+            "description": "Also apply your layout when a window opens. Skipped while hyperspace is on. This applies only the older container list (`towelwise.layout.containers`); once a layout is saved with Choose Layout, it is skipped.",
             "scope": "application"
           },
           "towelwise.layout.agents": {
@@ -196,7 +196,7 @@
             },
             "additionalProperties": false,
             "scope": "application",
-            "markdownDescription": "Where each agent lives: `left` or `right` side bar, the bottom `panel`, or a `column` of the editor grid (not available yet). When this is set, **Towelwise: Restore Layout** moves each agent there and ignores `towelwise.layout.containers` and `towelwise.layout.commands`."
+            "markdownDescription": "Where each agent lives: `left` or `right` side bar, the bottom `panel`, or a `column` of the editor grid. When this is set, **Towelwise: Restore Layout** moves each agent there and ignores `towelwise.layout.containers` and `towelwise.layout.commands`."
           },
           "towelwise.layout.grid": {
             "type": "object",
