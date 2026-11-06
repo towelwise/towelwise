@@ -454,12 +454,14 @@ let machine: Promise<Machine> | undefined;
 const isFolder = (p: string) => fs.statSync(p, { throwIfNoEntry: false })?.isDirectory() === true;
 
 export function liveHost(storageDir: string, log: (line: string) => void, editors?: Editors): MyLayoutHost {
+  // Read once per restore: trust granted while it runs must not start its commands; only the next restore may (decision 0006).
+  const trusted = vscode.workspace.isTrusted;
   return {
     focusMain,
     planTerminal: async (terminal) => {
       machine ??= detectMachine();
       const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
-      return planTerminal(terminal, await machine, folders, isFolder);
+      return planTerminal(terminal, await machine, folders, isFolder, trusted);
     },
     run: (command) => vscode.commands.executeCommand(command),
     bridge: {

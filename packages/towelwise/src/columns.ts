@@ -166,6 +166,9 @@ export function cellsInOrder(grid: SavedGrid): { holds?: Holds; terminal?: CellT
   return walk(grid.groups);
 }
 
+/** Whether any terminal cell runs a startup command when it opens. */
+export const hasStartupCommand = (grid: SavedGrid | undefined): boolean => !!grid && cellsInOrder(grid).some((c) => !!c.terminal?.command);
+
 /** What each cell holds, in the grid's reading order. */
 export const holdsInOrder = (grid: SavedGrid): (Holds | undefined)[] => cellsInOrder(grid).map((c) => c.holds);
 

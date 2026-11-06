@@ -97,6 +97,7 @@ export function planTerminal(
   machine: Machine,
   folders: readonly string[],
   exists: (p: string) => boolean,
+  trusted = true,
 ): { open: TerminalOpen; problems: string[] } {
   const name = terminalName(t);
   const problems: string[] = [];
@@ -113,6 +114,8 @@ export function planTerminal(
     if (where !== undefined && exists(where)) open.cwd = where;
     else problems.push(`${name}: the folder "${t.folder}" was not found, so it opened in the workspace folder`);
   }
-  if (t.command) open.command = t.command;
+  // A startup command runs the project's own scripts, so only in a project the person trusts (decision 0006).
+  if (t.command && trusted) open.command = t.command;
+  else if (t.command) problems.push(`${name}: its startup command did not run, because this project is not trusted. Trust it and reload the window to run it`);
   return { open, problems };
 }

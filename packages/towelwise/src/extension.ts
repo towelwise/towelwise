@@ -7,6 +7,7 @@ import { keepLayoutRecordIn, openLayoutPage, recoverSavedLayout } from './layout
 import { keepHoldRecordIn, liveEditors, recoverHeldSetting, watchTabs } from './liveEditors';
 import { applyLayoutLocked, applyLayoutOnStartup, closeAgentTabs, liveHost, Outcome, reportOutcome } from './myLayout';
 import { readLayout } from './savedLayout';
+import { hasStartupCommand } from './columns';
 import { logMenuProblems } from './menuEntries';
 import { openPicker } from './pickerPanel';
 import { available, detectMachine, launch, SHELL_KEYS, ShellKey, startDir } from './shells';
@@ -108,6 +109,16 @@ export function activate(context: vscode.ExtensionContext): void {
         }
       } catch (e) {
         showError(e);
+      }
+    }),
+  );
+
+  // Startup commands were withheld while the project was untrusted; they run when the layout next opens its terminals,
+  // never on their own the moment trust is granted (decision 0006).
+  context.subscriptions.push(
+    vscode.workspace.onDidGrantWorkspaceTrust(() => {
+      if (hasStartupCommand(readLayout(log)?.grid)) {
+        void vscode.window.showInformationMessage('Towelwise: this project is trusted now. Your terminals will run their startup commands after you reload the window.');
       }
     }),
   );
