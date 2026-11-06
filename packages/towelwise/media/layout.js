@@ -292,7 +292,11 @@ function resultNode(result) {
 
 function render(state) {
   // Every state update rebuilds the page, so remember which control had focus and give it back afterwards.
-  const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : undefined;
+  const active = document.activeElement;
+  const focused = active && active.dataset ? active.dataset.key : undefined;
+  // A text field reports its change when it loses focus, so what is typed in the focused one is not sent yet: the state
+  // still holds the old text, and drawing that would erase what the person is typing.
+  const typed = focused && active.type === 'text' ? { value: active.value, from: active.selectionStart, to: active.selectionEnd } : undefined;
   if (state.result) lastResult = state.result;
   else if (state.clearResult) lastResult = undefined;
   app.replaceChildren(
@@ -308,7 +312,13 @@ function render(state) {
   if (lastResult) app.append(resultNode(lastResult));
   if (focused) {
     const again = [...app.querySelectorAll('[data-key]')].find((n) => n.dataset.key === focused);
-    if (again) again.focus();
+    if (again) {
+      again.focus();
+      if (typed && again.type === 'text') {
+        again.value = typed.value;
+        again.setSelectionRange(typed.from, typed.to);
+      }
+    }
   }
 }
 

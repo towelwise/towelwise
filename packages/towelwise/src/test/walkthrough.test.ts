@@ -25,11 +25,11 @@ suite('walkthrough', () => {
     await extension().activate();
   });
 
-  test('there is one walkthrough with the six steps in order', () => {
+  test('there is one walkthrough with the five steps in order', () => {
     assert.strictEqual(walkthroughs().length, 1);
     assert.deepStrictEqual(
       steps().map((s) => s.id),
-      ['agents', 'arrange', 'choose', 'restore', 'hyperspace', 'settings'],
+      ['agents', 'choose', 'restore', 'hyperspace', 'settings'],
     );
   });
 
@@ -46,7 +46,6 @@ suite('walkthrough', () => {
   const SELECTED = ['onStepSelected'];
   const EXPECTED: { id: string; buttons: string[]; events: string[] }[] = [
     { id: 'agents', buttons: ['workbench.view.extensions'], events: SELECTED },
-    { id: 'arrange', buttons: [], events: SELECTED },
     { id: 'choose', buttons: ['towelwise.layout.choose'], events: ['onCommand:towelwise.layout.choose'] },
     { id: 'restore', buttons: ['towelwise.layout.restore'], events: ['onCommand:towelwise.layout.restore'] },
     { id: 'hyperspace', buttons: ['towelwise.hyperspace.toggle'], events: ['onCommand:towelwise.hyperspace.toggle'] },
