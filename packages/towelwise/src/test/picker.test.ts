@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { AREAS, CHROME, restore, toggle } from '../hyperspace';
 import { Draft, OPTIONS, pageHtml, parseMessage } from '../picker';
+import { openPicker } from '../pickerPanel';
+import { fakePanel } from './fakePanel';
 import { AgentId } from '../agents';
 import { LayoutState, PartName } from '../sizes';
 
@@ -835,6 +837,42 @@ suite('picker', () => {
 
     layout.busy = false;
     assert.deepStrictEqual((await draft.save()).written, ['hideActivityBar']);
+  });
+
+  test('Save and Dismiss stays open when a choice changes while it writes, says so, and closes once that is saved too', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const s = spy();
+    let started!: () => void;
+    const writing = new Promise<void>((resolve) => (started = resolve));
+    const write = async (option: string, value: boolean) => {
+      started();
+      await held;
+      await s.write(option, value);
+    };
+    const page = fakePanel([]);
+    const storage = fs.mkdtempSync(path.join(os.tmpdir(), 'towelwise-picker-'));
+    const context = { extensionUri: vscode.Uri.file(storage), subscriptions: [] } as unknown as vscode.ExtensionContext;
+    try {
+      openPicker(context, storage, () => page.panel as unknown as vscode.WebviewPanel, () => new Draft(write, undefined, undefined, layoutOf({}, false)));
+      // Hide is the default, so Keep is the change to save.
+      await page.send({ type: 'choose', option: 'hideActivityBar', choice: 'keep' });
+      const saving = page.send({ type: 'save' });
+      await writing;
+      await page.send({ type: 'choose', option: 'hideActivityBar', choice: 'hide' });
+      release();
+      await saving;
+      assert.strictEqual(globalOf('hideActivityBar'), false, 'the save wrote what was chosen when it was pressed');
+      assert.strictEqual(page.disposed, false, 'Hide is not saved yet, so the panel stays');
+      assert.strictEqual((page.posted.at(-1)?.result as { stale?: boolean } | undefined)?.stale, true);
+
+      await page.send({ type: 'save' });
+      assert.strictEqual(globalOf('hideActivityBar'), true);
+      assert.strictEqual(page.disposed, true);
+    } finally {
+      page.panel.dispose();
+      fs.rmSync(storage, { recursive: true, force: true });
+    }
   });
 
   test('once a layout is saved, Save leaves the hidden sizes and editor grid alone, keeps them as drafts, and still saves the rest', async () => {

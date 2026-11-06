@@ -27,14 +27,21 @@ function el(tag, className, text) {
 // The last Save result stays on screen across redraws until the next Save.
 let lastResult;
 
+// While Save runs only Cancel works: a field reports its text when it loses focus, so text typed now could miss the
+// save and be lost when the panel closes. Any Save result (which every outcome but closing sends) unlocks the page.
+let saving = false;
+const lockForSave = () => {
+  if (saving) for (const node of app.querySelectorAll('[data-key]')) if (node.dataset.key !== 'cancel') node.disabled = true;
+};
+
 function render(state) {
   // Every state update rebuilds the page, so remember which control had focus and give it back afterwards.
   const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : undefined;
-  if (state.result) lastResult = state.result;
+  if (state.result) [lastResult, saving] = [state.result, false];
   app.replaceChildren();
   app.append(
     el('h1', '', 'Edit Hyperspace Layout'),
-    el('p', 'intro', 'Click a part of the window to choose what hyperspace does with it when you jump. Nothing changes until you press Save.'),
+    el('p', 'intro', 'Click a part of the window to choose what hyperspace does with it when you jump. Nothing changes until you press Save and Dismiss.'),
   );
 
   const mock = el('div', 'mock');
@@ -159,9 +166,13 @@ function render(state) {
     app.append(el('p', 'info', 'Hyperspace is on now. What you save applies from the next jump; this session is unchanged.'));
   }
 
-  const save = el('button', 'primary', 'Save');
+  const save = el('button', 'primary', 'Save and Dismiss');
   save.dataset.key = 'save';
-  save.addEventListener('click', () => vscodeApi.postMessage({ type: 'save' }));
+  save.addEventListener('click', () => {
+    saving = true;
+    lockForSave();
+    vscodeApi.postMessage({ type: 'save' });
+  });
   const cancel = el('button', '', 'Cancel');
   cancel.dataset.key = 'cancel';
   cancel.addEventListener('click', () => vscodeApi.postMessage({ type: 'cancel' }));
@@ -175,11 +186,12 @@ function render(state) {
   if (lastResult) {
     const { written, failed, skipped } = lastResult;
     if (failed) {
-      status.textContent = `Could not save ${labelOf(failed.option)}: ${failed.message}. Your other choices are kept; press Save to try again.`;
+      status.textContent = `Could not save ${labelOf(failed.option)}: ${failed.message}. Your other choices are kept; press Save and Dismiss to try again.`;
       status.className = 'status error';
     } else {
       status.textContent = written.length === 0 ? 'Nothing to save.' : `Saved ${written.length} ${written.length === 1 ? 'change' : 'changes'} to your user settings.`;
     }
+    if (lastResult.stale && !failed) status.textContent += ' You changed something while it was saving, so press Save and Dismiss again to include that.';
     // A layout saved meanwhile put an agent there: that choice was dropped, so say which.
     if (skipped && skipped.length > 0) {
       status.textContent += ` Not saved, because your layout now uses ${skipped.length === 1 ? 'it' : 'them'}: ${skipped.map((s) => `${labelOf(s.option)} (${s.reason})`).join(', ')}.`;
@@ -196,6 +208,7 @@ function render(state) {
     const again = [...app.querySelectorAll('[data-key]')].find((node) => node.dataset.key === focused);
     if (again) again.focus();
   }
+  lockForSave();
 }
 
 window.addEventListener('message', (event) => {

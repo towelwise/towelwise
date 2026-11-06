@@ -357,6 +357,14 @@ export class Draft {
     });
   }
 
+  /** Whether the draft holds anything Save has not written, such as a choice changed while Save was writing. */
+  unsaved(): boolean {
+    if (this.waiting > 0 || OPTIONS.some(({ option }) => this.value.get(option) !== this.baseline.get(option))) return true;
+    // A saved layout owns sizes and the editor grid, so Save leaves those drafts unwritten on purpose.
+    if (this.view.saved) return false;
+    return JSON.stringify(this.sizesObject()) !== this.baselineSizes || JSON.stringify(this.grid ?? null) !== this.baselineGrid;
+  }
+
   savedOptions(): string[] {
     return [...OPTIONS.map((o) => o.option), 'sizes', 'editorGrid'].filter((option) => this.saved.has(option));
   }
@@ -379,8 +387,12 @@ export class Draft {
   // writing waits and then sees what the first saved.
   private queue: Promise<unknown> = Promise.resolve();
 
+  // Jobs queued but not started, so unsaved() counts an edit waiting behind a Save.
+  private waiting = 0;
+
   private enqueue<T>(job: () => Promise<T> | T): Promise<T> {
-    const run = this.queue.then(job);
+    this.waiting++;
+    const run = this.queue.then(() => (this.waiting--, job()));
     this.queue = run.catch(() => undefined);
     return run;
   }

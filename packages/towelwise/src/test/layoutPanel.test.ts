@@ -16,7 +16,9 @@ import {
   saveLayoutSettings,
   writeAll,
 } from '../layoutPanel';
+import { LayoutDraft } from '../layoutDraft';
 import { withLock } from '../lock';
+import { fakePanel } from './fakePanel';
 import { failReadOf } from './readFailure';
 
 // The real lock files go in a folder of their own, not the extension's storage.
@@ -38,45 +40,6 @@ const gate = () => {
   });
   return { promise, release, fail };
 };
-
-// A page that records what is sent to it and lets the test send what the page would send.
-function fakePanel(events: string[]) {
-  const posted: Array<Record<string, unknown>> = [];
-  const listeners: Array<() => void> = [];
-  let handler: ((message: unknown) => unknown) | undefined;
-  const page = {
-    posted,
-    revealed: 0,
-    disposed: false,
-    send: (message: unknown) => handler?.(message),
-    panel: {
-      webview: {
-        html: '',
-        cspSource: 'test',
-        asWebviewUri: (uri: vscode.Uri) => uri,
-        postMessage: async (message: Record<string, unknown>) => void posted.push(message),
-        onDidReceiveMessage: (h: (message: unknown) => unknown) => {
-          handler = h;
-          return { dispose() {} };
-        },
-      },
-      reveal: () => {
-        page.revealed++;
-        events.push('reveal');
-      },
-      dispose: () => {
-        if (page.disposed) return;
-        page.disposed = true;
-        listeners.splice(0).forEach((l) => l());
-      },
-      onDidDispose: (l: () => void) => {
-        listeners.push(l);
-        return { dispose() {} };
-      },
-    },
-  };
-  return page;
-}
 
 // The window, with the three things the page waits on under the test's control.
 function fakeHost(options: { busy?: boolean; gatedHold?: boolean } = {}) {
@@ -240,6 +203,83 @@ suite('layout page', () => {
       const agents = w.pages[2].posted.at(-1)?.agents as Array<{ id: string; place: string }>;
       assert.notStrictEqual(agents.find((a) => a.id === 'codex')?.place, 'right', 'closing the page dropped its draft');
     });
+
+    test('Save and Reload saves, closes the page and reloads the window', async () => {
+      const w = fakeHost();
+      const writes: unknown[] = [];
+      openLayoutPage(context, log, new LayoutDraft(undefined, { read: async () => undefined, write: async (v) => void writes.push(v) }), w.host);
+      await w.pages[0].send({ type: 'save' });
+      assert.strictEqual(writes.length, 1);
+      assert.strictEqual(w.pages[0].disposed, true);
+      assert.ok(w.events.includes('run workbench.action.reloadWindow'));
+    });
+
+    test('a Save that fails leaves the page open, shows why there (which unlocks its fields), and does not reload', async () => {
+      const w = fakeHost();
+      const fail = async () => {
+        throw new Error('disk full');
+      };
+      openLayoutPage(context, log, new LayoutDraft(undefined, { read: async () => undefined, write: fail }), w.host);
+      await w.pages[0].send({ type: 'save' });
+      assert.strictEqual(w.pages[0].disposed, false);
+      assert.ok(!w.events.includes('run workbench.action.reloadWindow'));
+      assert.deepStrictEqual(w.pages[0].posted.at(-1)?.result, { ok: false, problem: 'disk full' });
+    });
+
+    // A draft whose write waits until the test releases it.
+    const slowSave = () => {
+      const writing = gate();
+      const writes: Array<{ sizes: unknown }> = [];
+      const draft = new LayoutDraft(undefined, {
+        read: async () => undefined,
+        write: async (v) => {
+          writes.push(v);
+          await writing.promise;
+        },
+      });
+      return { writing, writes, draft };
+    };
+
+    test('a size typed while Save and Reload is writing keeps the page open with that size, says so, and does not reload', async () => {
+      const w = fakeHost();
+      const s = slowSave();
+      openLayoutPage(context, log, s.draft, w.host);
+      await w.pages[0].send({ type: 'size', part: 'sidebar', value: '20' });
+      const saving = w.pages[0].send({ type: 'save' });
+      await flush();
+      const typing = w.pages[0].send({ type: 'size', part: 'sidebar', value: '35' });
+      s.writing.release();
+      await Promise.all([saving, typing]);
+      assert.deepStrictEqual(s.writes[0].sizes, { sidebar: 0.2 });
+      assert.strictEqual(w.pages[0].disposed, false);
+      assert.ok(!w.events.includes('run workbench.action.reloadWindow'));
+      assert.deepStrictEqual(w.pages[0].posted.find((m) => m.result)?.result, { ok: true, stale: true });
+
+      await w.pages[0].send({ type: 'save' });
+      assert.deepStrictEqual(s.writes[1].sizes, { sidebar: 0.35 }, 'the size typed while saving was kept');
+      assert.ok(w.events.includes('run workbench.action.reloadWindow'));
+    });
+
+    for (const [how, close] of [
+      ['Cancel', (page: ReturnType<typeof fakePanel>) => void page.send({ type: 'cancel' })],
+      ['its tab', (page: ReturnType<typeof fakePanel>) => page.panel.dispose()],
+    ] as const) {
+      test(`a page closed with ${how} while Save and Reload is writing does not reload, and leaves the next page alone`, async () => {
+        const w = fakeHost();
+        const s = slowSave();
+        openLayoutPage(context, log, s.draft, w.host);
+        const saving = w.pages[0].send({ type: 'save' });
+        await flush();
+        close(w.pages[0]);
+        openLayoutPage(context, log, undefined, w.host);
+        await w.pages[1].send({ type: 'place', agent: 'codex', place: 'right' });
+        s.writing.release();
+        await saving;
+        assert.strictEqual(s.writes.length, 1, 'the write that had started still finished');
+        assert.ok(!w.events.includes('run workbench.action.reloadWindow'));
+        assert.strictEqual(w.pages[1].disposed, false);
+      });
+    }
   });
 });
 
