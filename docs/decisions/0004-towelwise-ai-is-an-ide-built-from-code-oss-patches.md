@@ -1,5 +1,7 @@
 # Towelwise AI is an IDE built from Code-OSS with a small patch set
 
+Status: superseded by [0007](0007-towelwise-ai-is-a-fork-of-code-oss.md) (2026-11-06).
+
 Towelwise began as a VS Code extension, and that showed its limit: extensions cannot read or set the layout ([0003](0003-hyperspace-never-reads-or-reopens-layout-state.md)), so the product's main idea, a window laid out exactly as a person chooses and held that way, could not be built as one. Towelwise AI is now its own IDE: scripts that take upstream Code-OSS and apply a small set of patches, in the way VSCodium does and starting from its MIT-licensed scripts. Most Towelwise code stays in a built-in extension, and core patches are kept few and careful so each upstream release is cheap to absorb.
 
 A one-evening test on VSCodium (2026-10-31, Windows) showed that Claude Code and Codex install from Open VSX, sign in fresh with separate config folders, chat, and survive a reload. That test was the condition for this decision. VSCodium is a stand-in, so the sign-in test is repeated on the first Towelwise AI build.

@@ -1,6 +1,6 @@
 # Change the IDE through the built-in extension first, and patch core only when it cannot reach
 
-Status: approved by the owner (2026-11-02). Refines [0004](0004-towelwise-ai-is-an-ide-built-from-code-oss-patches.md), which stays as written.
+Status: superseded by [0007](0007-towelwise-ai-is-a-fork-of-code-oss.md) (2026-11-06). Was approved by the owner (2026-11-02). Refines [0004](0004-towelwise-ai-is-an-ide-built-from-code-oss-patches.md), which stays as written.
 
 0004 chose a small patch set on upstream Code-OSS and said core patches are "few and careful", but did not say when a change belongs in the built-in extension and when it needs a patch. Work since then showed where the line falls. The owner expects more menu changes (the first is the Terminal menu) and more edits that an extension cannot make, and wants the extension to go first because it means fewer patches.
 
