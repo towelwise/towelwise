@@ -345,9 +345,20 @@ export function openLayoutPage(
           case 'useCurrentSizes':
             await draft.useCurrentSizes();
             break;
-          case 'save':
-            await send({ result: await draft.save() });
+          case 'save': {
+            // A save that throws is shown on the page like a refusal, so the result unlocks the page's fields.
+            const result = await draft.save().catch((e: unknown): SaveResult => ({ ok: false, problem: e instanceof Error ? e.message : String(e) }));
+            // Closed while it saved (Cancel or its tab): the write stands, but a reload now could discard another page's draft.
+            if (closed) return;
+            // A refusal, or a change made while it saved, stays on the page to be read; a reload would lose it.
+            if (!result.ok || result.stale) {
+              await send({ result });
+              return;
+            }
+            panel.dispose();
+            await host.run('workbench.action.reloadWindow');
             return;
+          }
           case 'restore':
             // Restore moves focus between editor groups, which acts on the window that has focus. From this
             // page's own window it would rearrange the page, so the page closes first, the restore runs in

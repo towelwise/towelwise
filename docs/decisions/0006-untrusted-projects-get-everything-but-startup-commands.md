@@ -6,6 +6,8 @@ Restricted Mode (a project the person has not trusted) disables any extension th
 
 **Decision.** The extension declares limited support. In an untrusted project everything works, except that terminals the layout opens get no startup command. If the person trusts the project during the session, Towelwise tells them that the startup commands will run once they reload the window. Nothing starts on its own when trust is granted.
 
+**Clarified 2026-11-05 (built-app check, no change in policy).** Towelwise omits startup commands in untrusted projects; by default, Code-OSS also asks for trust before starting the shell, and cancelling can close the terminal and its empty column. The owner accepts this core behavior.
+
 **Ruled out**
 
 - **Full support.** Opening an untrusted repo would run its scripts without the person ever choosing to.

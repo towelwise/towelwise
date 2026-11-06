@@ -2,24 +2,31 @@ import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isActive } from './hyperspace';
 import { holdLayoutSaves } from './layoutPanel';
-import { Draft, liveLayoutEnv, pageHtml, parseMessage } from './picker';
+import { Draft, SaveResult, liveLayoutEnv, pageHtml, parseMessage } from './picker';
 
 // One panel at a time. Its draft lives here, so hiding the panel keeps it and closing the panel drops it.
 let current: { panel: vscode.WebviewPanel } | undefined;
 
-export function openPicker(context: vscode.ExtensionContext, storageDir: string): void {
+// The tests pass a stand-in panel and draft.
+export function openPicker(
+  context: vscode.ExtensionContext,
+  storageDir: string,
+  createPanel: (media: vscode.Uri) => vscode.WebviewPanel = (media) =>
+    vscode.window.createWebviewPanel('towelwise.hyperspace.edit', 'Edit Hyperspace Layout', vscode.ViewColumn.Active, {
+      enableScripts: true,
+      localResourceRoots: [media],
+    }),
+  makeDraft = () => new Draft(undefined, undefined, undefined, { read: liveLayoutEnv.read, hold: holdLayoutSaves }),
+): void {
   if (current) {
     current.panel.reveal();
     return;
   }
 
   const media = vscode.Uri.joinPath(context.extensionUri, 'media');
-  const panel = vscode.window.createWebviewPanel('towelwise.hyperspace.edit', 'Edit Hyperspace Layout', vscode.ViewColumn.Active, {
-    enableScripts: true,
-    localResourceRoots: [media],
-  });
+  const panel = createPanel(media);
   current = { panel };
-  const draft = new Draft(undefined, undefined, undefined, { read: liveLayoutEnv.read, hold: holdLayoutSaves });
+  const draft = makeDraft();
   const uri = (file: string) => panel.webview.asWebviewUri(vscode.Uri.joinPath(media, file)).toString();
   panel.webview.html = pageHtml({
     cspSource: panel.webview.cspSource,
@@ -78,9 +85,15 @@ export function openPicker(context: vscode.ExtensionContext, storageDir: string)
             await draft.setSize(message.part, message.value);
             await send();
             break;
-          case 'save':
-            await send({ result: await draft.save() });
+          case 'save': {
+            // A save that throws is shown on the page like a failed write, so the result unlocks the page's fields.
+            const result = await draft.save().catch((e: unknown): SaveResult => ({ written: [], failed: { option: 'hyperspace', message: e instanceof Error ? e.message : String(e) } }));
+            // A failure, a choice dropped because the layout now uses it, or an edit made while it wrote stays on the page.
+            const stale = draft.unsaved();
+            if (result.failed || result.skipped || stale) await send({ result: { ...result, ...(stale && { stale }) } });
+            else panel.dispose();
             break;
+          }
           case 'cancel':
             panel.dispose();
             break;

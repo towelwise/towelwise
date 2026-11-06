@@ -30,6 +30,21 @@ function button(label, onClick, className, key) {
 // The last Save result stays on screen across redraws until the next Save.
 let lastResult;
 
+// While Save runs only Cancel works: a field reports its text when it loses focus, so text typed now could miss the
+// save and be lost when the page reloads. Any Save result (which every outcome but closing sends) unlocks the page.
+let saving = false;
+const lockForSave = () => {
+  if (saving) for (const node of app.querySelectorAll('[data-key]')) if (node.dataset.key !== 'cancel') node.disabled = true;
+};
+// The edge drag in progress, if any; Save (pressed from the keyboard) ends it first so its size is saved too.
+let endDrag;
+const save = () => {
+  endDrag?.();
+  saving = true;
+  lockForSave();
+  send({ type: 'save' });
+};
+
 function agentsSection(state) {
   const section = el('section');
   section.append(
@@ -58,6 +73,8 @@ function agentsSection(state) {
 // Dragging an edge: the neighbours resize as the pointer moves, and the new size is sent when it is let go.
 function dragEdge(event, handle, axis, items, at, message) {
   event.preventDefault();
+  // Locked like the fields while Save runs: a size sent only on release could miss the save.
+  if (saving) return;
   const container = handle.parentElement;
   const rect = container.getBoundingClientRect();
   const sizes = items.map((i) => i.size);
@@ -75,12 +92,14 @@ function dragEdge(event, handle, axis, items, at, message) {
     nodes[at + 1].style.flexGrow = String(room - wanted);
   };
   const end = () => {
+    endDrag = undefined;
     handle.removeEventListener('pointermove', move);
     handle.removeEventListener('pointerup', end);
     handle.removeEventListener('pointercancel', end);
     handle.classList.remove('dragging');
     send({ ...message, size: wanted });
   };
+  endDrag = end;
   handle.addEventListener('pointermove', move);
   handle.addEventListener('pointerup', end);
   handle.addEventListener('pointercancel', end);
@@ -277,7 +296,7 @@ function resultNode(result) {
   ok.setAttribute('role', 'status');
   ok.append(
     document.createTextNode(
-      (result.stale ? 'Saved what you had when you pressed Save. You changed something while it was saving, so press Save again to include that. ' : 'Saved. ') +
+      (result.stale ? 'Saved what you had when you pressed Save and Reload. You changed something while it was saving, so press Save and Reload again to include that. ' : 'Saved. ') +
         'To see it, press Restore Layout now, or reload the window (Developer: Reload Window, or Ctrl+R) and it is applied when the window opens.',
     ),
   );
@@ -297,19 +316,20 @@ function render(state) {
   // A text field reports its change when it loses focus, so what is typed in the focused one is not sent yet: the state
   // still holds the old text, and drawing that would erase what the person is typing.
   const typed = focused && active.type === 'text' ? { value: active.value, from: active.selectionStart, to: active.selectionEnd } : undefined;
-  if (state.result) lastResult = state.result;
+  if (state.result) [lastResult, saving] = [state.result, false];
   else if (state.clearResult) lastResult = undefined;
   app.replaceChildren(
     el('h1', '', 'Choose Layout'),
-    el('p', 'intro', 'Choose your agents, where each one lives, and how the editor area is laid out. Nothing changes until you press Save.'),
+    el('p', 'intro', 'Choose your agents, where each one lives, and how the editor area is laid out. Nothing changes until you press Save and Reload.'),
     agentsSection(state),
     gridSection(state),
     sizesSection(state),
   );
   const footer = el('div', 'footer');
-  footer.append(button('Save', () => send({ type: 'save' }), 'primary', 'save'), button('Close', () => send({ type: 'cancel' }), '', 'cancel'));
+  footer.append(button('Save and Reload', save, 'primary', 'save'), button('Cancel', () => send({ type: 'cancel' }), '', 'cancel'));
   app.append(footer);
   if (lastResult) app.append(resultNode(lastResult));
+  lockForSave();
   if (focused) {
     const again = [...app.querySelectorAll('[data-key]')].find((n) => n.dataset.key === focused);
     if (again) {

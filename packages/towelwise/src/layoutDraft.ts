@@ -33,7 +33,8 @@ export interface LayoutEnv {
   write(values: { agents: AgentPlaces; grid: SavedGrid | Record<string, never>; sizes: Sizes }): PromiseLike<void>;
 }
 
-// stale: something was changed while Save was working, so what was saved is what the page showed when Save was pressed.
+// stale: something was changed, or an edit was still queued, while Save was working, so what was saved is what the page
+// showed when Save was pressed.
 export type SaveResult = { ok: true; stale?: true } | { ok: false; problem: string };
 
 const SIZE_LABELS: Record<PartName, string> = { sidebar: 'Primary side bar', auxiliarybar: 'Secondary side bar', panel: 'Bottom panel' };
@@ -60,6 +61,8 @@ export class LayoutDraft {
   // Counts changes, so Save can tell whether the draft moved on while it was waiting for the window.
   private revision = 0;
   private queue: Promise<unknown> = Promise.resolve();
+  // Edits queued but not started: one sent while Save is writing changes the draft only after Save is done.
+  private waiting = 0;
 
   constructor(
     saved: MyLayout | undefined,
@@ -81,7 +84,9 @@ export class LayoutDraft {
   }
 
   private enqueue<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(task, task);
+    this.waiting++;
+    const start = () => (this.waiting--, task());
+    const run = this.queue.then(start, start);
     this.queue = run.catch(() => undefined);
     return run;
   }
@@ -281,7 +286,7 @@ export class LayoutDraft {
         }
       }
       await this.env.write({ agents: places, grid: grid ?? {}, sizes });
-      return this.revision === at ? { ok: true } : { ok: true, stale: true };
+      return this.revision === at && this.waiting === 0 ? { ok: true } : { ok: true, stale: true };
     });
   }
 }

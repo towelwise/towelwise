@@ -1,0 +1,21 @@
+diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts b/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts
+--- a/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts
++++ b/src/vs/workbench/contrib/welcomeGettingStarted/common/gettingStartedContent.ts
+@@ -210,7 +210,8 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+ 		description: localize('gettingStarted.setup.description', "Customize your editor, learn the basics, and start coding"),
+ 		isFeatured: true,
+ 		icon: setupIcon,
+-		when: '!isWeb',
++		// Towelwise: hidden; its only step sends people to Microsoft's VS Code videos.
++		when: 'false',
+ 		walkthroughPageTitle: localize('gettingStarted.setup.walkthroughPageTitle', 'Setup Towelwise AI'),
+ 		next: 'Beginner',
+ 		content: {
+@@ -309,7 +310,6 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
+ 		isFeatured: true,
+ 		icon: setupIcon,
+ 		when: CONTEXT_ACCESSIBILITY_MODE_ENABLED.key,
+-		next: 'Setup',
+ 		walkthroughPageTitle: localize('gettingStarted.setupAccessibility.walkthroughPageTitle', 'Setup Towelwise AI Accessibility'),
+ 		content: {
+ 			type: 'steps',
