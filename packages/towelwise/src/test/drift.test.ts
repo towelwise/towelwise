@@ -1,6 +1,11 @@
 import * as assert from 'node:assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import * as vscode from 'vscode';
 import { Layout } from '../grid';
-import { DriftHost, DriftWatch, Live, LiveReads, captureLive, driftOf, readLive, runWhileFocused } from '../drift';
+import { DriftHost, DriftWatch, Live, LiveReads, captureLive, driftOf, liveDriftHost, readLive, runWhileFocused } from '../drift';
+import { keepLayoutRecordIn, layoutRecordPath } from '../layoutPanel';
 import { MyLayout } from '../myLayout';
 import { LayoutState } from '../sizes';
 
@@ -90,7 +95,7 @@ suite('drift', () => {
   });
 
   suite('the prompt', () => {
-    function watch(opts: { saved?: MyLayout | undefined; blocked?: boolean; answer?: string | undefined; failSave?: boolean; failRead?: boolean; hold?: Promise<string>; during?: () => void } = {}) {
+    function watch(opts: { saved?: MyLayout | undefined; blocked?: boolean; answer?: string | undefined; failSave?: boolean; failRead?: boolean; hold?: Promise<string>; during?: () => void; beforeWrite?: () => void } = {}) {
       const state = { live: exact(), blocked: opts.blocked ?? false, answer: opts.answer, saved: 'saved' in opts ? opts.saved : saved() };
       const asked: { message: string; buttons: string[] }[] = [];
       const done: string[] = [];
@@ -108,8 +113,11 @@ suite('drift', () => {
           opts.during?.();
           return opts.hold ?? state.answer;
         },
-        save: async (layout) => {
+        save: async (change) => {
           if (opts.failSave) throw new Error('settings are busy');
+          opts.beforeWrite?.(); // another window may save before this one has the lock
+          const layout = state.saved && change(state.saved);
+          if (!layout) return;
           savedLayout = layout;
           done.push('save');
         },
@@ -214,6 +222,28 @@ suite('drift', () => {
       t.state.live = drifted();
       await t.w.check();
       assert.deepStrictEqual(t.savedLayout()!.agents, { claudeCode: 'column', codex: 'panel' });
+    });
+
+    test('Save this layout keeps what another window saved after the window was read, and only measures proportions', async () => {
+      const t = watch({
+        answer: 'Save this layout',
+        beforeWrite: () => (t.state.saved = { ...saved(), agents: { claudeCode: 'column', codex: 'panel' } }),
+      });
+      t.state.live = drifted();
+      await t.w.check();
+      assert.deepStrictEqual(t.savedLayout()!.agents, { claudeCode: 'column', codex: 'panel' });
+      assert.deepStrictEqual(t.savedLayout()!.grid!.groups.map((g) => g.size), [0.34, 0.26, 0.4]);
+    });
+
+    test('Save this layout saves nothing if another window changed the columns before the write', async () => {
+      const t = watch({
+        answer: 'Save this layout',
+        beforeWrite: () => (t.state.saved = { ...saved(), grid: { orientation: 0, groups: [{ size: 1 }, { size: 1 }] } }),
+      });
+      t.state.live = drifted();
+      await t.w.check();
+      assert.deepStrictEqual(t.done, []);
+      assert.strictEqual(t.told.length, 1);
     });
 
     test('Save this layout saves nothing if the window went back to the saved layout while the message was open', async () => {
@@ -454,5 +484,42 @@ suite('drift', () => {
       w.focus(true);
       assert.strictEqual(w.running(), true);
     });
+  });
+});
+
+suite('drift save, with the real settings and a save record on disk', () => {
+  const layout = () => vscode.workspace.getConfiguration('towelwise.layout');
+  const GLOBAL = vscode.ConfigurationTarget.Global;
+  let dir: string;
+  setup(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-drift-'));
+    keepLayoutRecordIn(dir);
+  });
+  teardown(async () => {
+    keepLayoutRecordIn(undefined);
+    for (const key of ['agents', 'grid', 'sizes']) await layout().update(key, undefined, GLOBAL);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('a save left half done by another window is put right before Save this layout decides, so its values are not saved again', async () => {
+    // Codex was on the left; a save that moved it right failed after writing agents, and its record keeps the originals.
+    await layout().update('agents', { codex: 'right' }, GLOBAL);
+    await layout().update('sizes', { sidebar: 0.2 }, GLOBAL);
+    fs.writeFileSync(
+      layoutRecordPath(dir),
+      JSON.stringify({
+        before: { agents: { had: true, value: { codex: 'left' } }, grid: { had: false }, sizes: { had: true, value: { sidebar: 0.2 } } },
+        after: { agents: { codex: 'right' }, grid: {}, sizes: { sidebar: 0.3 } },
+      }),
+    );
+    const seen: unknown[] = [];
+    await liveDriftHost(dir, {} as vscode.ExtensionContext, () => undefined).save((saved) => {
+      seen.push(saved.agents);
+      return { ...saved, sizes: { sidebar: 0.25 } };
+    });
+    assert.deepStrictEqual(seen, [{ codex: 'left' }], 'the decision is made on the settings as recovered');
+    assert.deepStrictEqual(layout().inspect('agents')?.globalValue, { codex: 'left' });
+    assert.deepStrictEqual(layout().inspect('sizes')?.globalValue, { sidebar: 0.25 });
+    assert.ok(!fs.existsSync(layoutRecordPath(dir)));
   });
 });

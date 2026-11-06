@@ -4,7 +4,7 @@ import { AGENTS, AGENT_IDS, AgentId, AgentPlaces, Holds, Place, coreContainerId 
 import { CellTerminal, TerminalOpen, isEmptyTerminal, planTerminal, terminalName } from './cellTerminal';
 import { cellsInOrder } from './columns';
 import { Layout, SavedGrid, toLayout } from './grid';
-import { Bridge, applySizes, isActive } from './hyperspace';
+import { Bridge, applySizes, focusMain, isActive } from './hyperspace';
 import { withLock } from './lock';
 import { Location, locationFor } from './savedLayout';
 import { Machine, detectMachine } from './shells';
@@ -455,14 +455,7 @@ const isFolder = (p: string) => fs.statSync(p, { throwIfNoEntry: false })?.isDir
 
 export function liveHost(storageDir: string, log: (line: string) => void, editors?: Editors): MyLayoutHost {
   return {
-    focusMain: async () => {
-      try {
-        return (await vscode.commands.executeCommand<unknown>('_towelwise.layout.focusMain')) === true;
-      } catch {
-        // No bridge (stock VS Code): the editor commands act on whichever window is active, as they always have.
-        return undefined;
-      }
-    },
+    focusMain,
     planTerminal: async (terminal) => {
       machine ??= detectMachine();
       const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);

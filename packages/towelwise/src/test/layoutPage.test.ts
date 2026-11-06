@@ -58,6 +58,53 @@ suite('choose layout page', () => {
     for (const type of KNOWN) assert.ok(sent.has(type), `never sent: ${type}`);
   });
 
+  test('a redraw keeps what is typed in the focused field and has not been sent yet', () => {
+    // Just enough of a page to run the script: nodes that hold children, a key, a value and the focus.
+    class Fake {
+      children: Fake[] = [];
+      dataset: Record<string, string> = {};
+      style: Record<string, string> = {};
+      value = '';
+      type = '';
+      selectionStart = 0;
+      selectionEnd = 0;
+      constructor(readonly tagName: string) {}
+      append(...nodes: Fake[]) {
+        this.children.push(...nodes);
+      }
+      replaceChildren(...nodes: Fake[]) {
+        this.children = nodes;
+      }
+      setAttribute() {}
+      addEventListener() {}
+      focus() {
+        doc.activeElement = this;
+      }
+      setSelectionRange(from: number, to: number) {
+        [this.selectionStart, this.selectionEnd] = [from, to];
+      }
+      querySelectorAll(): Fake[] {
+        return this.children.flatMap((c) => [...(c.dataset.key ? [c] : []), ...c.querySelectorAll()]);
+      }
+    }
+    const app = new Fake('div');
+    const doc = { activeElement: undefined as Fake | undefined, getElementById: () => app, createElement: (tag: string) => new Fake(tag), createTextNode: () => new Fake('#text') };
+    let onMessage: ((e: { data: unknown }) => void) | undefined;
+    const win = { addEventListener: (_: string, fn: typeof onMessage) => (onMessage = fn) };
+    new Function('acquireVsCodeApi', 'document', 'window', media('layout.js'))(() => ({ postMessage: () => undefined }), doc, win);
+
+    const state = (percent: string) => ({ type: 'state', agents: [], grid: { on: false }, sizes: { available: true, rows: [{ part: 'sidebar', label: 'Side bar', percent }] } });
+    onMessage!({ data: state('20') });
+    const field = () => app.querySelectorAll().find((n) => n.dataset.key === 'size-sidebar')!;
+    field().focus();
+    field().value = '2';
+    field().setSelectionRange(1, 1);
+    onMessage!({ data: state('20') });
+    assert.strictEqual(doc.activeElement, field());
+    assert.strictEqual(field().value, '2', 'the unfinished text is still there');
+    assert.strictEqual(field().selectionStart, 1);
+  });
+
   test('the style sheet loads nothing from outside', () => {
     assert.ok(!/url\(|@import|https?:\/\//.test(media('layout.css')));
   });

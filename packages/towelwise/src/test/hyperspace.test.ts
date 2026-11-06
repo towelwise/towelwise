@@ -231,6 +231,43 @@ suite('hyperspace', () => {
     assert.strictEqual(win.ran.filter((c) => c === TOGGLE_FULL_SCREEN).length, 2);
   });
 
+  // A window whose main window comes to the front, or does not; the full screen and grid commands act on whichever is in front.
+  const behindWindow = (windowId: string, comesForward: boolean) => {
+    const win = fakeWindow(windowId);
+    return { ...win, focusMain: async () => (win.ran.push('focus main'), comesForward) };
+  };
+
+  test('the main window comes to the front before full screen, on the jump and on the way back', async () => {
+    await enableFullScreen();
+    const win = behindWindow('a', true);
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.ran.filter((c) => c === 'focus main' || c === TOGGLE_FULL_SCREEN), ['focus main', TOGGLE_FULL_SCREEN]);
+    win.ran.length = 0;
+    await toggle(storageDir, win);
+    assert.deepStrictEqual(win.ran.filter((c) => c === 'focus main' || c === TOGGLE_FULL_SCREEN), ['focus main', TOGGLE_FULL_SCREEN]);
+  });
+
+  test('when the main window cannot come to the front, neither the jump nor the restore changes anything', async () => {
+    await enableFullScreen();
+    const before = globalValues();
+    const stuck = behindWindow('a', false);
+    await assert.rejects(toggle(storageDir, stuck), /main window/);
+    assert.deepStrictEqual(stuck.ran, ['focus main']);
+    assert.strictEqual(isActive(storageDir), false);
+    assert.deepStrictEqual(globalValues(), before);
+
+    await toggle(storageDir, behindWindow('a', true));
+    const hidden = globalValues();
+    stuck.ran.length = 0;
+    await assert.rejects(toggle(storageDir, stuck), /main window/);
+    await assert.rejects(restore(storageDir, stuck), /main window/);
+    assert.deepStrictEqual(stuck.ran, ['focus main', 'focus main']);
+    assert.strictEqual(isActive(storageDir), true, 'the saved copy stays, so the next press restores');
+    assert.deepStrictEqual(globalValues(), hidden);
+    await toggle(storageDir, behindWindow('a', true));
+    assert.deepStrictEqual(globalValues(), before);
+  });
+
   test('restoring from another window restores settings but leaves full screen alone', async () => {
     await enableFullScreen();
     const before = globalValues();
@@ -676,6 +713,25 @@ suite('hyperspace', () => {
     assert.deepStrictEqual(win.applied, []);
     assert.strictEqual(win.told.length, 1);
     await toggle(storageDir, win);
+  });
+
+  test('the real host records and sets the main window grid, with the main window in front, whichever window is active', async () => {
+    const calls: string[] = [];
+    const fakes = [
+      vscode.commands.registerCommand('_towelwise.layout.mainLayout', () => (calls.push('read'), columns(500, 500))),
+      vscode.commands.registerCommand('_towelwise.layout.focusMain', () => (calls.push('focus'), true)),
+    ];
+    try {
+      await saveGrid(savedColumns(0.25, 0.75));
+      await toggle(storageDir);
+      const recorded = JSON.parse(fs.readFileSync(stateFile(storageDir), 'utf8'));
+      assert.deepStrictEqual(recorded.grid, columns(500, 500), 'the main window grid is recorded, not the active window one');
+      assert.strictEqual(calls[0], 'focus', 'the main window comes forward before anything is read or set');
+      await toggle(storageDir);
+    } finally {
+      fakes.forEach((f) => f.dispose());
+      await vscode.commands.executeCommand('workbench.action.editorLayoutSingle');
+    }
   });
 
   test('a layout with no agents in the side areas, or no layout at all, hides every area the settings say', async () => {

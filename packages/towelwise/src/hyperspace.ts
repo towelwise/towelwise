@@ -54,8 +54,19 @@ export interface Host {
   run(command: string): PromiseLike<unknown>;
   bridge?: Bridge;
   grid?: Grid;
+  /** Brings the main window to the front; false if it could not, undefined with no bridge (stock VS Code). */
+  focusMain?(): PromiseLike<boolean | undefined>;
   log?(line: string): void;
   tell?(message: string): void;
+}
+
+/** Brings the main window forward, since the editor-grid commands act on the active one. undefined: no bridge (stock VS Code). */
+export async function focusMain(): Promise<boolean | undefined> {
+  try {
+    return (await vscode.commands.executeCommand<unknown>('_towelwise.layout.focusMain')) === true;
+  } catch {
+    return undefined;
+  }
 }
 
 let logLine: (line: string) => void = () => undefined;
@@ -67,12 +78,20 @@ export const setLog = (log: (line: string) => void) => {
 const DEFAULT_HOST: Host = {
   windowId: randomUUID(),
   run: (command) => vscode.commands.executeCommand(command),
+  focusMain,
   bridge: {
     state: async () => parseLayoutState(await vscode.commands.executeCommand('_towelwise.layout.state')),
     setSize: (part, pixels) => vscode.commands.executeCommand('_towelwise.layout.setSize', part, pixels),
   },
+  // The main window's grid, whichever window is active (sizes already are). Stock VS Code has no bridge: the active window's.
   grid: {
-    read: () => vscode.commands.executeCommand('vscode.getEditorLayout'),
+    read: async () => {
+      try {
+        return await vscode.commands.executeCommand('_towelwise.layout.mainLayout');
+      } catch {
+        return vscode.commands.executeCommand('vscode.getEditorLayout');
+      }
+    },
     apply: (layout) => vscode.commands.executeCommand('vscode.setEditorLayout', layout),
   },
   log: (line) => logLine(line),
@@ -106,11 +125,19 @@ export const stateFile = (storageDir: string) => path.join(storageDir, 'hyperspa
 
 export const isActive = (storageDir: string) => fs.existsSync(stateFile(storageDir));
 
+// Full screen, the areas and the grid act on the window in front, so the main window comes first; if it cannot, nothing changes.
+async function mainToFront(host: Host): Promise<void> {
+  if ((await host.focusMain?.()) === false) {
+    throw new Error('the main window could not be brought to the front. Click it and try again');
+  }
+}
+
 /** Jumps or restores. Returns the settings a workspace override kept from being hidden. */
 export function toggle(storageDir: string, host = DEFAULT_HOST): Promise<string[]> {
   return withLock(
     storageDir,
     async () => {
+      await mainToFront(host);
       if (isActive(storageDir)) {
         await restoreSnapshot(storageDir, host);
         return [];
@@ -133,6 +160,7 @@ export function restore(storageDir: string, host = DEFAULT_HOST): Promise<boolea
   return withLock(
     storageDir,
     async () => {
+      await mainToFront(host);
       await restoreSnapshot(storageDir, host);
       return true;
     },

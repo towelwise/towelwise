@@ -155,10 +155,17 @@ export function keepLayoutRecordIn(storageDir: string | undefined): void {
 }
 
 // One save at a time across windows, and not while another window restores: recovery treats a record it finds as left over.
-export async function saveLayoutSettings(values: Values): Promise<void> {
+// A function is called under the lock, so it decides on the settings as they are when written; undefined writes nothing.
+export async function saveLayoutSettings(values: Values | (() => Values | undefined)): Promise<void> {
   const dir = recordDir;
-  if (!dir) return writeAll(config(), values);
-  const saved = await withLock(dir, async () => (await writeAll(config(), values, layoutRecordPath(dir)), true), false);
+  const write = async (record?: string) => {
+    // A save left half done is put right first, so the function never decides on its mix (writeAll would only do it after).
+    if (record && fs.existsSync(record)) await putBackFromRecord(record, config());
+    const now = typeof values === 'function' ? values() : values;
+    if (now) await writeAll(config(), now, record);
+  };
+  if (!dir) return write();
+  const saved = await withLock(dir, async () => (await write(layoutRecordPath(dir)), true), false);
   if (!saved) throw new Error('Another Towelwise window is busy with a layout. Try saving again in a moment.');
 }
 

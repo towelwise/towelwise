@@ -98,7 +98,8 @@ export interface DriftHost {
   blocked(): boolean;
   /** One message that does not block, with buttons; undefined when it is closed without a choice. */
   ask(message: string, buttons: string[]): PromiseLike<string | undefined>;
-  save(layout: MyLayout): Promise<void>;
+  /** Writes what `change` makes of the layout as saved at the moment of writing, under the cross-window lock; nothing if it returns undefined. */
+  save(change: (saved: MyLayout) => MyLayout | undefined): Promise<void>;
   restore(): PromiseLike<unknown>;
   /** Opens Choose Layout, starting from the window's grid. */
   edit(live: Live): PromiseLike<unknown>;
@@ -166,7 +167,7 @@ export class DriftWatch {
       // Whatever the answer changes is decided on the window and the settings as they are now.
       const now = await this.current();
       if (choice === SAVE) {
-        if (now) await this.save(now.saved, now.live);
+        if (now) await this.save(now.live);
       } else {
         if (choice === EDIT && now) await this.host.edit(now.live);
         this.quiet = snapshot(now?.live ?? live);
@@ -184,14 +185,17 @@ export class DriftWatch {
     return this.host.blocked() ? undefined : { saved, live };
   }
 
-  private async save(saved: MyLayout, live: Live): Promise<void> {
-    const drift = driftOf(saved, live);
-    if (drift === 'none') return; // it went back to the saved layout while the message was open
-    if (drift === 'shape') {
-      this.host.tell('Towelwise: your columns changed while that message was open, so nothing was saved. You will be asked again.');
-      return;
-    }
-    await this.host.save(captureLive(saved, live));
+  // Decided on the layout as saved when it is written: another window may have saved since this one looked.
+  private async save(live: Live): Promise<void> {
+    await this.host.save((saved) => {
+      const drift = driftOf(saved, live);
+      if (drift === 'none') return undefined; // it went back to the saved layout while the message was open
+      if (drift === 'shape') {
+        this.host.tell('Towelwise: your columns changed while that message was open, so nothing was saved. You will be asked again.');
+        return undefined;
+      }
+      return captureLive(saved, live);
+    });
   }
 }
 
@@ -283,7 +287,12 @@ export function liveDriftHost(storageDir: string, context: vscode.ExtensionConte
     live: () => readLive(liveReads),
     blocked: () => isActive(storageDir) || isLayoutPageBusy() || isApplying(),
     ask: (message, buttons) => vscode.window.showInformationMessage(message, ...buttons),
-    save: (layout) => saveLayoutSettings({ agents: layout.agents ?? {}, grid: layout.grid ?? {}, sizes: layout.sizes ?? {} }),
+    save: (change) =>
+      saveLayoutSettings(() => {
+        const saved = readLayout(() => undefined);
+        const layout = saved && change(saved);
+        return layout && { agents: layout.agents ?? {}, grid: layout.grid ?? {}, sizes: layout.sizes ?? {} };
+      }),
     restore: () => vscode.commands.executeCommand('towelwise.layout.restore'),
     edit: (live) => {
       const saved = readLayout(log);
