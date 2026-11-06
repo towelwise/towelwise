@@ -65,6 +65,8 @@ jobs:
         working-directory: ${{ runner.temp }}/vscodium/vscode
         run: |
           npm ci --ignore-scripts
+          # The one postinstall step the typecheck needs: the checksum-verified Electron typings in .build/typings.
+          node build/npm/electronTypes.ts
           bash "${GITHUB_WORKSPACE}/ide/typecheck-errors.sh" > "${RUNNER_TEMP}/before.txt"
           before="${RUNNER_TEMP}/before.txt"
           echo "$(wc -l < "${before}") errors already there without our patches"
