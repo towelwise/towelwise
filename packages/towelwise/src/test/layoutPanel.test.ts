@@ -17,6 +17,7 @@ import {
   writeAll,
 } from '../layoutPanel';
 import { withLock } from '../lock';
+import { failReadOf } from './readFailure';
 
 // The real lock files go in a folder of their own, not the extension's storage.
 const storage = fs.mkdtempSync(path.join(os.tmpdir(), 'towelwise-page-'));
@@ -493,6 +494,23 @@ suite('saving the layout settings, with a record on disk', () => {
     assert.strictEqual(await recoverSavedLayout(dir, section), true);
     assert.deepStrictEqual(values, old);
     assert.ok(!fs.existsSync(record()));
+  });
+
+  test('a record that cannot be read for a moment is kept, and the next start still puts the originals back', async () => {
+    let broken = true;
+    const { values, section } = fake(old, (k, v) => broken && ((k === 'grid' && v === next.grid) || (k === 'agents' && v === old.agents)));
+    await assert.rejects(() => writeAll(section, asValues(next), record()), /grid is locked/);
+    broken = false;
+
+    const failing = failReadOf(record());
+    try {
+      await assert.rejects(() => recoverSavedLayout(dir, section), /could not be read/);
+    } finally {
+      failing.restore();
+    }
+    assert.ok(fs.existsSync(record()), 'the only copy of the old values is still there');
+    assert.strictEqual(await recoverSavedLayout(dir, section), true);
+    assert.deepStrictEqual(values, old);
   });
 
   suite('saving again after a save that could not be put right', () => {

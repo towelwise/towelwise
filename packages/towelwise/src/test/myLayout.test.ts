@@ -380,15 +380,42 @@ suite('agents and my layout', () => {
     test('offers to close a second copy open as a tab, and closes it only when the button is pressed', async () => {
       const closed: AgentId[] = [];
       const idle = ui(false);
-      await reportOutcome(outcome({ openAsTab: ['claudeCode'] }), idle.ui, async (id) => void closed.push(id));
+      await reportOutcome(outcome({ openAsTab: ['claudeCode'] }), idle.ui, async (ids) => void closed.push(...ids));
       assert.deepStrictEqual(idle.offers, [{ message: 'Towelwise: Claude Code also opens as an editor tab.', button: 'Close it' }]);
       assert.deepStrictEqual(closed, []);
 
       const pressed = ui(true);
       const closedNow: AgentId[] = [];
-      await reportOutcome(outcome({ openAsTab: ['claudeCode', 'codex'] }), pressed.ui, async (id) => void closedNow.push(id));
+      await reportOutcome(outcome({ openAsTab: ['claudeCode', 'codex'] }), pressed.ui, async (ids) => void closedNow.push(...ids));
       assert.strictEqual(pressed.offers[0].message, 'Towelwise: Claude Code and Codex also open as an editor tab.');
       assert.deepStrictEqual(closedNow, ['claudeCode', 'codex']);
+    });
+
+    test('a tab of that agent opening or closing while the report is open means the button closes nothing, and says so', async () => {
+      let change = (): void => undefined;
+      let disposed = 0;
+      const watched: (readonly AgentId[])[] = [];
+      const watch = (agents: readonly AgentId[], onChange: () => void) => {
+        watched.push(agents);
+        change = onChange;
+        return { dispose: () => void disposed++ };
+      };
+      let press!: (pressed: boolean) => void;
+      const told: string[] = [];
+      const closed: AgentId[] = [];
+      const reporting = reportOutcome(
+        outcome({ openAsTab: ['codex'] }),
+        { tell: (m) => void told.push(m), offer: () => new Promise<boolean>((resolve) => (press = resolve)) },
+        async (ids) => void closed.push(...ids),
+        watch,
+      );
+      change(); // a new Codex conversation opens, and it may hold an unsent draft
+      press(true);
+      await reporting;
+      assert.deepStrictEqual(closed, []);
+      assert.match(told[0], /out of date/);
+      assert.deepStrictEqual(watched, [['codex']]);
+      assert.strictEqual(disposed, 1, 'the watch ends with the offer');
     });
   });
 

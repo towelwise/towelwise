@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { isActive, restore, stateFile, toggle } from '../hyperspace';
+import { failReadOf } from './readFailure';
 
 const ACTIVITY_BAR = 'workbench.activityBar.location';
 const STATUS_BAR = 'workbench.statusBar.visible';
@@ -125,6 +126,24 @@ suite('hyperspace', () => {
 
     await toggle(storageDir);
     assert.strictEqual(isActive(storageDir), false);
+    assert.deepStrictEqual(globalValues(), before);
+  });
+
+  test('a state file that cannot be read for a moment is kept, so a later restore still puts the settings back', async () => {
+    const before = globalValues();
+    await toggle(storageDir);
+    assert.strictEqual(isActive(storageDir), true);
+
+    const failing = failReadOf(stateFile(storageDir));
+    try {
+      await assert.rejects(toggle(storageDir), /could not be read/);
+    } finally {
+      failing.restore();
+    }
+    assert.strictEqual(isActive(storageDir), true, 'the only copy of the original settings is still there');
+    assert.strictEqual(config().get(ACTIVITY_BAR), 'hidden', 'and nothing was changed');
+
+    await toggle(storageDir);
     assert.deepStrictEqual(globalValues(), before);
   });
 

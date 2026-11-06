@@ -7,6 +7,7 @@ import { TerminalShell, shellsOn } from './cellTerminal';
 import { LayoutDraft, LayoutEnv, SaveResult, parseLayoutMessage } from './layoutDraft';
 import { liveEditors } from './liveEditors';
 import { withLock } from './lock';
+import { readRecoveryText } from './recoveryFile';
 import { Editors, MyLayout } from './myLayout';
 import { pageHtml } from './picker';
 import { readSaved } from './savedLayout';
@@ -95,9 +96,12 @@ const isEntry = (e: unknown): e is Entry =>
 
 /** The record, if it has the whole shape writeAll gives it. */
 function readRecord(file: string): { before: Record<string, Entry>; after: Record<string, unknown> } | undefined {
+  // A read that fails throws and keeps the record; only content that does not fit is dropped by the caller.
+  const text = readRecoveryText(file);
+  if (text === undefined) return undefined;
   let saved: unknown;
   try {
-    saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    saved = JSON.parse(text);
   } catch {
     return undefined;
   }

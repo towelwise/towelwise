@@ -3,7 +3,7 @@ import { AGENTS, Holds, coreContainerId, holdsOfTab } from '../agents';
 import { CellTerminal, TerminalOpen, terminalName } from '../cellTerminal';
 import { Column, toSavedGrid } from '../columns';
 import { Layout } from '../grid';
-import { Editors, MyLayout, MyLayoutHost, applyLayout, closeAgentTabs } from '../myLayout';
+import { Editors, MyLayout, MyLayoutHost, applyLayout, closeAgentTabs, reportOutcome } from '../myLayout';
 import { LayoutState } from '../sizes';
 
 interface Tab {
@@ -45,6 +45,8 @@ function editorWindow(
     otherWindows?: Tab[][];
     // What the bridge's focusMain answers; left out, there is no bridge.
     focusMain?: boolean;
+    // Closing tabs waits for this before it takes effect, like a real close that is still in flight.
+    closeGate?: Promise<void>;
   } = {},
 ) {
   const others: Group[] = (opts.otherWindows ?? []).map((tabs) => ({ tabs, held: tabs.length > 0 }));
@@ -97,10 +99,13 @@ function editorWindow(
       calls.push(`move ${(t as Tab).label} to ${at(target)}`);
       closeEmpty();
     },
-    closeTab: async (t) => {
-      const from = groupOf(t as Tab);
-      from?.tabs.splice(from.tabs.indexOf(t as Tab), 1);
-      calls.push(`close ${(t as Tab).label}`);
+    closeTabs: async (tabs) => {
+      await opts.closeGate;
+      for (const t of tabs as Tab[]) {
+        const from = groupOf(t);
+        from?.tabs.splice(from.tabs.indexOf(t), 1);
+        calls.push(`close ${t.label}`);
+      }
       closeEmpty();
     },
     openTerminal: async (g, open) => {
@@ -385,8 +390,51 @@ suite('my layout: columns', () => {
 
     test('Close it closes that agent\'s tabs and no others', async () => {
       const w = editorWindow({ start: [[tab('codex'), tab()], [tab('codex'), tab('terminal')]] });
-      await closeAgentTabs(w.editors, 'codex');
+      await closeAgentTabs(w.editors, ['codex']);
       assert.deepStrictEqual(heldBy(w), [['file'], ['terminal']]);
+    });
+
+    test('a conversation opened while the closing is still going is not closed with the rest', async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const w = editorWindow({ start: [[tab('claudeCode'), tab('codex', 'Fix the bug')], [tab()]], closeGate: gate });
+      const out = await applyLayout(w.host, { agents: { claudeCode: 'left', codex: 'right' } });
+      assert.deepStrictEqual(out.openAsTab, ['claudeCode', 'codex']);
+
+      // The person presses Close it; the closes are in flight when a new Codex conversation opens (it may hold an unsent draft).
+      const pressing = reportOutcome(out, offerUi().ui, (ids) => closeAgentTabs(w.editors, ids));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      w.groups[1].tabs.push(tab('codex', 'New chat'));
+      release();
+      await pressing;
+      // Both reported tabs are gone (and their emptied column with them); the new conversation is still open.
+      assert.deepStrictEqual(heldBy(w), [['file', 'codex']]);
+      assert.strictEqual(w.groups[0].tabs[1].label, 'New chat');
+    });
+
+    // The button on a report that has been overtaken does nothing: a conversation opened since may hold an unsent draft,
+    // and a layout applied since may need the tab it would close.
+    const offerUi = () => {
+      const told: string[] = [];
+      return { told, ui: { tell: (m: string) => void told.push(m), offer: async () => true } };
+    };
+
+    test('an applied layout puts an end to earlier reports, so their button closes nothing', async () => {
+      const w = editorWindow({ start: [[tab('codex', 'Fix the bug'), tab()]] });
+      const first = await applyLayout(w.host, { agents: { codex: 'left' } });
+      assert.deepStrictEqual(first.openAsTab, ['codex']);
+      await applyLayout(w.host, { agents: { codex: 'right' } }); // another layout is applied while the first report is open
+      const u = offerUi();
+      await reportOutcome(first, u.ui, (ids) => closeAgentTabs(w.editors, ids));
+      assert.deepStrictEqual(heldBy(w), [['codex', 'file']], 'the tab is still there');
+      assert.match(u.told[0], /out of date/);
+    });
+
+    test('a report that is still current closes the tab when the button is pressed', async () => {
+      const w = editorWindow({ start: [[tab('codex', 'Fix the bug'), tab()]] });
+      const out = await applyLayout(w.host, { agents: { codex: 'left' } });
+      await reportOutcome(out, offerUi().ui, (ids) => closeAgentTabs(w.editors, ids));
+      assert.deepStrictEqual(heldBy(w), [['file']]);
     });
   });
 

@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Layout, leafCount, maxDifference, parseLayout, parseSavedGrid, sameShape, toLayout } from './grid';
 import { withLock } from './lock';
+import { readRecoveryText } from './recoveryFile';
 import { agentsByPart, readLayout } from './savedLayout';
 import {
   LayoutState,
@@ -297,8 +298,10 @@ async function restoreSizes(host: Host, recorded: Recorded): Promise<void> {
 }
 
 function readSnapshot(file: string): Snapshot {
+  // Outside the try: a read that fails keeps the file, and only content that does not fit is cleared.
+  const text = readRecoveryText(file) ?? '';
   try {
-    const data: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const data: unknown = JSON.parse(text);
     const known = (s: Saved) =>
       typeof s?.key === 'string' && typeof s.had === 'boolean' && CHROME.some((c) => c.key === s.key);
     // A bare array is the previous version's format: settings only, no full screen.

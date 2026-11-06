@@ -3,8 +3,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { keepHoldRecordIn, liveEditors, recoverHeldSetting, setMainGroupCount } from '../liveEditors';
+import { keepHoldRecordIn, liveEditors, recoverHeldSetting, setMainGroupCount, watchTabs } from '../liveEditors';
 import { withLock } from '../lock';
+import { failReadOf } from './readFailure';
 
 // These run against the real editor area of the test window: the adapter is what the built app uses.
 const settings = () => vscode.workspace.getConfiguration('workbench.editor');
@@ -141,6 +142,19 @@ suite('live editors', () => {
       assert.strictEqual(outcome, false, 'the lock is held, so recovery backs off');
       assert.strictEqual(globalValue(), false);
       assert.ok(fs.existsSync(record()));
+    });
+
+    test('a record that cannot be read for a moment is kept, and the next start still puts the value back', async () => {
+      await crashDuringHold(true);
+      const failing = failReadOf(record());
+      try {
+        await assert.rejects(() => recoverHeldSetting(dir), /could not be read/);
+      } finally {
+        failing.restore();
+      }
+      assert.ok(fs.existsSync(record()), 'the only copy of the user\'s value is still there');
+      assert.strictEqual(await recoverHeldSetting(dir), true);
+      assert.strictEqual(globalValue(), true);
     });
 
     test('an unreadable record is dropped and the setting is left as it is', async () => {
@@ -367,6 +381,32 @@ suite('live editors', () => {
       } finally {
         terminal?.dispose();
       }
+    });
+  });
+
+  suite('watching tabs of some kinds, for the "also open as a tab" report', () => {
+    test('fires when a tab of a watched kind opens or closes, and not for a plain file', async () => {
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      let fired = 0;
+      const watching = watchTabs(['terminal'], () => void fired++);
+      try {
+        await open('columns.test.js', 1);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        assert.strictEqual(fired, 0, 'a file is not a terminal');
+
+        const terminal = vscode.window.createTerminal({ name: 'watched', location: { viewColumn: vscode.ViewColumn.One } });
+        await until(() => fired > 0, 'the terminal tab opening');
+        const opened = fired;
+        terminal.dispose();
+        await until(() => fired > opened, 'the terminal tab closing');
+      } finally {
+        watching.dispose();
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      }
+      const after = fired;
+      await open('columns.test.js', 1);
+      assert.strictEqual(fired, after, 'nothing is reported once the watch is disposed');
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     });
   });
 
