@@ -24,6 +24,8 @@ jobs:
       GH_REPO_PATH: towelwise/towelwise
       ORG_NAME: Towelwise
       CI_BUILD: 'no'
+      # VSCodium applies its update-disable patch before ours, so the source must match the build's.
+      DISABLE_UPDATE: 'yes'
       VSCODE_LATEST: 'no'
       VSCODE_QUALITY: stable
       OS_NAME: windows
@@ -64,7 +66,12 @@ jobs:
         run: |
           npm ci --ignore-scripts
           bash "${GITHUB_WORKSPACE}/ide/typecheck-errors.sh" > "${RUNNER_TEMP}/before.txt"
-          echo "$(wc -l < "${RUNNER_TEMP}/before.txt") errors already there without our patches"
+          before="${RUNNER_TEMP}/before.txt"
+          echo "$(wc -l < "${before}") errors already there without our patches"
+          # shortcut: a breakdown to find why CI sees far more baseline errors than a local build; drop once explained.
+          echo "By error code:"; grep -oE 'error TS[0-9]+' "${before}" | sort | uniq -c | sort -rn || true
+          echo "Missing modules, names and types:"; grep -oE "Cannot find [a-z ]+ '[^']+'" "${before}" | sort | uniq -c | sort -rn | head -40 || true
+          echo "By file:"; cut -d: -f1 "${before}" | sort | uniq -c | sort -rn | head -40 || true
 
       - name: Apply our patches and typecheck again
         working-directory: ${{ runner.temp }}/vscodium/vscode
@@ -82,3 +89,13 @@ jobs:
             exit 1
           fi
           echo "Our patches apply and add no type errors."
+
+      - name: Keep the typecheck lists
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-errors
+          path: |
+            ${{ runner.temp }}/before.txt
+            ${{ runner.temp }}/after.txt
+          if-no-files-found: ignore

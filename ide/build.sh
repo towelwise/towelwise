@@ -69,6 +69,8 @@ export ASSETS_REPOSITORY="towelwise/towelwise"
 export BINARY_NAME="towelwise-ai"
 export GLOBAL_DIRNAME="towelwise-ai"
 export CI_BUILD="no"
+# No VSCodium update or download feed: Towelwise must never offer to update itself to VSCodium.
+export DISABLE_UPDATE="yes"
 export GH_REPO_PATH="towelwise/towelwise"
 export ORG_NAME="Towelwise"
 export SHOULD_BUILD="yes"

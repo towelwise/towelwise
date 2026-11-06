@@ -68,27 +68,6 @@ export function looksLikeExpression(when: string): boolean {
   return syntax.split(/&&|\|\|/).every((operand) => operand.trim() !== '');
 }
 
-export interface PlacedEntry extends MenuEntry {
-  // Which run of entries with the same group this one belongs to, counting from 0 in array order.
-  section: number;
-  // Its position in the array, which is its position in the menu.
-  order: number;
-}
-
-// Entries keep the array order. A group name that comes back after another group is a new section, not a
-// return to the first one, or the menu would quietly rearrange what was typed. The IDE patch applies the same rule.
-export function placeEntries(entries: readonly MenuEntry[]): PlacedEntry[] {
-  let section = -1;
-  let previous: string | undefined;
-  return entries.map((entry, order) => {
-    if (entry.group !== previous) {
-      section++;
-      previous = entry.group;
-    }
-    return { ...entry, section, order };
-  });
-}
-
 // One line per bad entry, so a typo in the setting is not silent. The entry is skipped; the rest still show.
 export function logMenuProblems(raw: unknown, log: (line: string) => void): void {
   for (const problem of validateEntries(raw).problems) log(`menu setting: ${problem}; skipped`);
