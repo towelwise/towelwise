@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { applyLayout, applyLayoutLocked, applyLayoutOnStartup, MyLayoutHost, Outcome, reportOutcome } from '../myLayout';
+import { applyLayout, applyLayoutLocked, applyLayoutOnStartup, liveHost, MyLayoutHost, Outcome, reportOutcome } from '../myLayout';
 import { agentsByPart, layoutInUse, locationFor } from '../savedLayout';
 import { LayoutState } from '../sizes';
 
@@ -276,6 +276,24 @@ suite('agents and my layout', () => {
       const third = windowWith({ [core]: 'auxiliarybar' });
       assert.notStrictEqual(await applyLayoutLocked(dir, third.host, { agents: { codex: 'left' } }), 'busy');
       assert.ok(third.calls.length > 0);
+    });
+  });
+
+  suite('the live host in a project that is not trusted', () => {
+    const real = Object.getOwnPropertyDescriptor(vscode.workspace, 'isTrusted');
+    const trust = (value: boolean) => Object.defineProperty(vscode.workspace, 'isTrusted', { get: () => value, configurable: true });
+    teardown(() => (real ? Object.defineProperty(vscode.workspace, 'isTrusted', real) : delete (vscode.workspace as { isTrusted?: boolean }).isTrusted));
+
+    test('trust granted while a restore is running does not run its startup commands; the next restore does (decision 0006)', async function () {
+      this.timeout(10000); // the first terminal asks WSL for its distributions
+      const web = { name: 'Web', command: 'npm run dev' };
+      trust(false);
+      const restore = liveHost(os.tmpdir(), noLog);
+      trust(true);
+      const planned = await restore.planTerminal(web);
+      assert.strictEqual(planned.open.command, undefined);
+      assert.strictEqual(planned.problems.length, 1);
+      assert.strictEqual((await liveHost(os.tmpdir(), noLog).planTerminal(web)).open.command, 'npm run dev');
     });
   });
 

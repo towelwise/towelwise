@@ -1,0 +1,84 @@
+# The core patches in ide/patches are not part of the extension checks in ci.yml. This applies them the way ide/build.sh
+# does (after VSCodium's own patches, at the pinned versions) and fails if they do not apply or add a type error.
+# It does not build or run the app; that stays a manual check before a release.
+name: Core patches
+
+on:
+  pull_request:
+    paths:
+      - 'ide/**'
+      - '.github/workflows/core-patches.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  apply-and-typecheck:
+    runs-on: ubuntu-latest
+    env:
+      # The same as ide/build.sh, so VSCodium prepares the source as it does for our build.
+      APP_NAME: Towelwise AI
+      ASSETS_REPOSITORY: towelwise/towelwise
+      BINARY_NAME: towelwise-ai
+      GLOBAL_DIRNAME: towelwise-ai
+      GH_REPO_PATH: towelwise/towelwise
+      ORG_NAME: Towelwise
+      CI_BUILD: 'no'
+      VSCODE_LATEST: 'no'
+      VSCODE_QUALITY: stable
+      OS_NAME: windows
+      VSCODE_ARCH: x64
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Self-check of the typecheck helper
+        run: bash ide/typecheck-errors.test.sh
+
+      - name: VSCodium and Code-OSS at the pinned versions, with VSCodium's patches
+        id: prepare
+        run: |
+          # No set -u: VSCodium's scripts test variables that may be unset.
+          set -eo pipefail
+          . ide/upstream.env
+          git clone --quiet --depth 1 --branch "${VSCODIUM_TAG}" https://github.com/VSCodium/vscodium.git "${RUNNER_TEMP}/vscodium"
+          cd "${RUNNER_TEMP}/vscodium"
+          . get_repo.sh
+          . version.sh
+          # VSCodium's prepare step up to our patches; what follows it (npm ci with native builds) is not needed to typecheck.
+          # shortcut: relies on the line that starts the patches/user loop; if VSCodium reshapes the script, this step fails.
+          grep -q '^for file in \.\./patches/user/' prepare_vscode.sh
+          awk '/^for file in \.\.\/patches\/user\//{exit} {print}' prepare_vscode.sh > prepare_until_user.sh
+          . ./prepare_until_user.sh
+          # setup-node reads node-version-file only from inside the workspace, so pass the version itself.
+          node=$(tr -d '[:space:]' < "${RUNNER_TEMP}/vscodium/vscode/.nvmrc")
+          [[ -n "${node}" ]]
+          echo "node=${node}" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.prepare.outputs.node }}
+
+      - name: Typecheck without our patches
+        working-directory: ${{ runner.temp }}/vscodium/vscode
+        run: |
+          npm ci --ignore-scripts
+          bash "${GITHUB_WORKSPACE}/ide/typecheck-errors.sh" > "${RUNNER_TEMP}/before.txt"
+          echo "$(wc -l < "${RUNNER_TEMP}/before.txt") errors already there without our patches"
+
+      - name: Apply our patches and typecheck again
+        working-directory: ${{ runner.temp }}/vscodium/vscode
+        run: |
+          set -euo pipefail
+          for patch in "${GITHUB_WORKSPACE}"/ide/patches/*.patch; do
+            echo "applying ${patch##*/}"
+            git apply --ignore-whitespace "${patch}"
+          done
+          bash "${GITHUB_WORKSPACE}/ide/typecheck-errors.sh" > "${RUNNER_TEMP}/after.txt"
+          new=$(comm -13 "${RUNNER_TEMP}/before.txt" "${RUNNER_TEMP}/after.txt")
+          if [[ -n "${new}" ]]; then
+            echo "Type errors our patches add:"
+            echo "${new}"
+            exit 1
+          fi
+          echo "Our patches apply and add no type errors."

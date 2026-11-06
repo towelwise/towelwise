@@ -32,6 +32,14 @@ _Avoid_: UI, decorations
 Where a person wants their agents and terminals in the window: which area each one lives in, the columns and rows of the editor grid, and how much of the window each area takes up. The same in every project; applying it puts each item where it belongs.
 _Avoid_: Arrangement, preset, workspace layout
 
+**Main window**:
+The window that holds the side bars and the bottom panel. The layout, hyperspace and restore always act on it, even when a floating editor window is the one in front.
+_Avoid_: Active window, primary window
+
+**Startup command**:
+A command the layout runs in a terminal when it opens it, such as starting a dev server. It runs only in a trusted project.
+_Avoid_: Init command, autorun
+
 **Hyperspace layout**:
 A person's saved choice of which chrome, and which areas that are not in use, to hide in hyperspace. Everything in use stays, sized as the layout says.
 _Avoid_: Snapshot, profile

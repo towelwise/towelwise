@@ -20,6 +20,12 @@
     "onStartupFinished"
   ],
   "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In a project you have not trusted, terminals the layout opens do not run their startup command."
+    }
+  },
   "scripts": {
     "build": "tsc -p .",
     "pretest": "npm run build",

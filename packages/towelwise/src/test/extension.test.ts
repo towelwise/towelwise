@@ -20,6 +20,12 @@ suite('towelwise.towelwise', () => {
     assert.ok(!contributes.keybindings.some((k: { command: string }) => k.command === 'towelwise.hyperspace.edit'));
   });
 
+  test('works in a project that is not trusted, with startup commands withheld (decision 0006)', () => {
+    const untrusted = vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON.capabilities?.untrustedWorkspaces;
+    assert.strictEqual(untrusted?.supported, 'limited');
+    assert.match(untrusted.description, /startup command/i);
+  });
+
   test('a project cannot override the layout settings', () => {
     const configuration = vscode.extensions.getExtension('towelwise.towelwise')?.packageJSON.contributes.configuration;
     const layout = Object.entries<{ scope?: string }>(

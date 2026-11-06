@@ -9,6 +9,7 @@ import {
   canAddRow,
   defaultColumns,
   fromSavedGrid,
+  hasStartupCommand,
   holdsInOrder,
   parseLayoutGrid,
   removeColumn,
@@ -222,5 +223,14 @@ suite('columns', () => {
       assert.deepStrictEqual(parseSavedGrid(ok, noLog), ok);
       assert.strictEqual(parseSavedGrid({ orientation: 0, groups: [{ size: 1, holds: 7 }] }, noLog), undefined);
     });
+  });
+});
+
+suite('hasStartupCommand', () => {
+  test('true only when some terminal cell, at any depth, has a startup command', () => {
+    const cell = (terminal?: object) => ({ size: 1, holds: 'terminal' as const, ...(terminal ? { terminal } : {}) });
+    assert.strictEqual(hasStartupCommand(undefined), false);
+    assert.strictEqual(hasStartupCommand({ orientation: 0, groups: [cell({ name: 'a' }), cell()] }), false);
+    assert.strictEqual(hasStartupCommand({ orientation: 0, groups: [cell(), { size: 1, groups: [cell(), cell({ command: 'npm run dev' })] }] }), true);
   });
 });

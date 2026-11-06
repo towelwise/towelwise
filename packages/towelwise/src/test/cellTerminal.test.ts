@@ -90,6 +90,13 @@ suite('cell terminals', () => {
       assert.strictEqual(planTerminal({ command: 'ls' }, full, [], exists).open.cwd, undefined);
     });
 
+    test('in a project that is not trusted, the terminal opens without its startup command, and says so', () => {
+      const plan = planTerminal({ shell: 'cmd', name: 'Web', folder: 'packages/web', command: 'npm run dev' }, full, [root], exists, false);
+      assert.deepStrictEqual(plan.open, { name: 'Web', shellPath: 'C:\\Windows\\System32\\cmd.exe', cwd: path.join(root, 'packages', 'web') });
+      assert.deepStrictEqual(plan.problems, ['Web: its startup command did not run, because this project is not trusted. Trust it and reload the window to run it']);
+      assert.deepStrictEqual(planTerminal({ name: 'Shell' }, full, [root], exists, false).problems, [], 'nothing to say without a command');
+    });
+
     test('an absolute folder is used as it is', () => {
       const abs = path.join(root, 'packages', 'web');
       assert.strictEqual(planTerminal({ folder: abs }, full, [], exists).open.cwd, abs);
