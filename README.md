@@ -1,5 +1,7 @@
 # Towelwise AI
 
+> **Archived.** This repository built Towelwise AI as an extension plus a few core patches, and is no longer developed. Towelwise AI continues as its own fork of Code-OSS in [towelwise/towelwise-production](https://github.com/towelwise/towelwise-production). Why: [decision 0007](docs/decisions/0007-towelwise-ai-is-a-fork-of-code-oss.md).
+
 **Your IDE, built for hyperspace.** *Don't Panic.*
 
 Towelwise AI is a free, open-source IDE for working with AI coding agents. It is built from [Code-OSS](https://github.com/microsoft/vscode), the open-source core of VS Code, and it works alongside the agents you already use without ever driving them.
