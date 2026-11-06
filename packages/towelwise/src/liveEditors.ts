@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Holds, holdsOfTab } from './agents';
 import { withLock } from './lock';
+import { readRecoveryText } from './recoveryFile';
 import { Editors } from './myLayout';
 
 const inputInfo = (tab: vscode.Tab) => {
@@ -14,6 +15,13 @@ const inputInfo = (tab: vscode.Tab) => {
 };
 
 const kindOf = (tab: vscode.Tab): Holds | undefined => holdsOfTab(inputInfo(tab));
+
+/** Calls onChange whenever a tab of one of these kinds opens or closes. A tab that only changes (its label, say) does not count. */
+export function watchTabs(kinds: readonly Holds[], onChange: () => void): vscode.Disposable {
+  return vscode.window.tabGroups.onDidChangeTabs((e) => {
+    if ([...e.opened, ...e.closed].some((tab) => kinds.includes(kindOf(tab) as Holds))) onChange();
+  });
+}
 
 // The main window's group count, while only the main window's groups are wanted (see useMainWindow); undefined means
 // every group counts. It is the main window's own count, not the other windows': a floating window that closes during a
@@ -174,9 +182,11 @@ export async function recoverHeldSetting(storageDir: string, log: (line: string)
   return withLock(
     storageDir,
     async () => {
+      // A read that fails throws and keeps the record; only content that does not fit is dropped below.
+      const text = readRecoveryText(file);
       let saved: unknown;
       try {
-        saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+        saved = text === undefined ? undefined : JSON.parse(text);
       } catch {
         saved = undefined;
       }
@@ -222,7 +232,7 @@ export const liveEditors: Editors = {
     await run('workbench.action.openEditorAtIndex', all[fromAt].tabs.indexOf(tab as vscode.Tab));
     await run('moveActiveEditor', { to: 'position', by: 'group', value: toAt + 1 });
   },
-  closeTab: (tab) => vscode.window.tabGroups.close(tab as vscode.Tab),
+  closeTabs: (tabs) => vscode.window.tabGroups.close(tabs as vscode.Tab[]),
   async closeGroup(group) {
     const at = registry.indexOf(group);
     await vscode.window.tabGroups.close(groupOf(group));

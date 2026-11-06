@@ -4,7 +4,7 @@ import { isActive, restore, setLog, toggle } from './hyperspace';
 import { applyOnStartup, liveVsCode, restoreLayout } from './layout';
 import { keepWatching } from './drift';
 import { keepLayoutRecordIn, openLayoutPage, recoverSavedLayout } from './layoutPanel';
-import { keepHoldRecordIn, liveEditors, recoverHeldSetting } from './liveEditors';
+import { keepHoldRecordIn, liveEditors, recoverHeldSetting, watchTabs } from './liveEditors';
 import { applyLayoutLocked, applyLayoutOnStartup, closeAgentTabs, liveHost, Outcome, reportOutcome } from './myLayout';
 import { readLayout } from './savedLayout';
 import { logMenuProblems } from './menuEntries';
@@ -22,7 +22,8 @@ const reportApplied = (outcome: Outcome): Promise<void> =>
       tell: (message) => void vscode.window.showInformationMessage(message),
       offer: async (message, button) => (await vscode.window.showInformationMessage(message, button)) === button,
     },
-    (id) => closeAgentTabs(liveEditors, id),
+    (ids) => closeAgentTabs(liveEditors, ids),
+    watchTabs,
   );
 
 export function activate(context: vscode.ExtensionContext): void {

@@ -41,7 +41,8 @@ export interface Editors {
   label(tab: object): string;
   focus(group: object): PromiseLike<unknown>;
   moveTab(tab: object, to: object): PromiseLike<unknown>;
-  closeTab(tab: object): PromiseLike<unknown>;
+  /** Closes these tabs in one call, so the set is fixed before anything is awaited. */
+  closeTabs(tabs: object[]): PromiseLike<unknown>;
   /** Opens a terminal in the group: as described, or the default one; a startup command is sent once it is open. */
   openTerminal(group: object, open?: TerminalOpen): PromiseLike<unknown>;
   /** Closes a group, which must be empty. */
@@ -91,6 +92,8 @@ export interface Outcome {
   problems: string[];
   // Agents placed in a side bar or the panel that also have an editor tab open. Nothing is closed for them.
   openAsTab: AgentId[];
+  // Which apply this was, so the report's "Close it" can tell a later apply has overtaken it. Set with openAsTab.
+  run?: number;
   refused?: 'hyperspace';
 }
 
@@ -288,10 +291,17 @@ async function placeInMainWindow(host: MyLayoutHost, editors: Editors, gridHost:
   return problems;
 }
 
-/** Closes every editor tab of an agent: the button on the "also open as a tab" report. */
-export async function closeAgentTabs(editors: Editors, id: AgentId): Promise<void> {
-  const tabs = editors.groups().flatMap((g) => editors.tabs(g).filter((t) => editors.kind(t) === id));
-  for (const tab of tabs) await editors.closeTab(tab);
+/** Every tab of this kind in the grid. */
+const tabsOf = (editors: Editors, holds: Holds): object[] => editors.groups().flatMap((g) => editors.tabs(g).filter((t) => editors.kind(t) === holds));
+
+/**
+ * Closes every editor tab of these agents: the button on the "also open as a tab" report, once reportOutcome has checked
+ * the report is still current. The tabs are all found before anything is awaited, and closed in one call: a conversation
+ * opened while the closing is in flight must not be found by a later look.
+ */
+export async function closeAgentTabs(editors: Editors, ids: readonly AgentId[]): Promise<void> {
+  const tabs = ids.flatMap((id) => tabsOf(editors, id));
+  if (tabs.length > 0) await editors.closeTabs(tabs);
 }
 
 /**
@@ -309,6 +319,8 @@ export async function applyLayout(host: MyLayoutHost, layout: MyLayout): Promise
   }
 }
 
+let latestRun = 0;
+
 // Applies running in this window, and who is told when one ends: the drift watch keeps quiet during one and starts again after.
 let applying = 0;
 const whenApplied: (() => void)[] = [];
@@ -320,6 +332,8 @@ export function onApplied(listener: () => void): void {
 async function applyNow(host: MyLayoutHost, layout: MyLayout): Promise<Outcome> {
   const outcome: Outcome = { placed: [], problems: [], openAsTab: [] };
   if (host.hyperspaceActive()) return { ...outcome, refused: 'hyperspace' };
+  // Counted once the apply really starts: it puts an end to the offers of every earlier apply.
+  const run = ++latestRun;
   const report = (problem: string) => {
     host.log(`layout: ${problem}`);
     outcome.problems.push(problem);
@@ -335,7 +349,10 @@ async function applyNow(host: MyLayoutHost, layout: MyLayout): Promise<Outcome> 
     if (problem) report(problem);
     else outcome.placed.push(id);
     // Its side view is where it was asked to be; a tab of the same agent in the editor is a second copy.
-    if (host.editors && findTab(host.editors, id)) outcome.openAsTab.push(id);
+    if (host.editors && findTab(host.editors, id)) {
+      outcome.openAsTab.push(id);
+      outcome.run = run;
+    }
   }
   if (layout.grid) {
     for (const problem of await placeColumns(host, layout.grid)) report(problem);
@@ -366,12 +383,20 @@ export interface ReportUi {
   offer(message: string, button: string): PromiseLike<boolean>;
 }
 
+/** Calls onChange whenever a tab of one of these agents opens or closes; dispose ends it. */
+export type WatchTabs = (agents: readonly AgentId[], onChange: () => void) => { dispose(): void };
+const noWatch: WatchTabs = () => ({ dispose: () => undefined });
+
 /**
  * Tells the person what an apply could not do: what was not placed, an agent also open as an editor tab (with a button
  * that closes it; nothing closes otherwise), or that hyperspace is on. The returned promise ends when the offer does, so
  * callers that must not wait for the person do not await it.
+ *
+ * The offer can stay on screen for a long time. A tab does not keep an identity VS Code gives extensions (nor does it
+ * across versions), and a conversation opened since may hold an unsent draft, so the button closes nothing once a tab
+ * of that agent has opened or closed, or another layout has been applied; it says so instead.
  */
-export async function reportOutcome(outcome: Outcome, ui: ReportUi, closeTabs: (id: AgentId) => PromiseLike<unknown>): Promise<void> {
+export async function reportOutcome(outcome: Outcome, ui: ReportUi, closeTabs: (ids: readonly AgentId[]) => PromiseLike<unknown>, watch: WatchTabs = noWatch): Promise<void> {
   if (outcome.refused) {
     ui.tell('Towelwise: leave hyperspace first, then restore your layout.');
     return;
@@ -379,8 +404,21 @@ export async function reportOutcome(outcome: Outcome, ui: ReportUi, closeTabs: (
   if (outcome.problems.length > 0) ui.tell(`Towelwise: your layout is applied, except: ${outcome.problems.join('; ')}.`);
   if (outcome.openAsTab.length === 0) return;
   const names = outcome.openAsTab.map((id) => AGENTS[id].label).join(' and ');
-  const pressed = await ui.offer(`Towelwise: ${names} also open${outcome.openAsTab.length > 1 ? '' : 's'} as an editor tab.`, 'Close it');
-  if (pressed) for (const id of outcome.openAsTab) await closeTabs(id);
+  let changed = false;
+  const watching = watch(outcome.openAsTab, () => (changed = true));
+  let pressed: boolean;
+  try {
+    pressed = await ui.offer(`Towelwise: ${names} also open${outcome.openAsTab.length > 1 ? '' : 's'} as an editor tab.`, 'Close it');
+  } finally {
+    watching.dispose();
+  }
+  if (!pressed) return;
+  if (changed || (outcome.run !== undefined && outcome.run !== latestRun)) {
+    ui.tell('Towelwise: that report is out of date (a tab opened or closed, or another layout was applied), so nothing was closed.');
+    return;
+  }
+  // One call, made in the same step as the check above: nothing is awaited in between.
+  await closeTabs(outcome.openAsTab);
 }
 
 /**
