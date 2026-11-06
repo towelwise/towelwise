@@ -24,6 +24,8 @@ jobs:
       GH_REPO_PATH: towelwise/towelwise
       ORG_NAME: Towelwise
       CI_BUILD: 'no'
+      # VSCodium applies its update-disable patch before ours, so the source must match the build's.
+      DISABLE_UPDATE: 'yes'
       VSCODE_LATEST: 'no'
       VSCODE_QUALITY: stable
       OS_NAME: windows
@@ -63,6 +65,8 @@ jobs:
         working-directory: ${{ runner.temp }}/vscodium/vscode
         run: |
           npm ci --ignore-scripts
+          # The one postinstall step the typecheck needs: the checksum-verified Electron typings in .build/typings.
+          node build/npm/electronTypes.ts
           bash "${GITHUB_WORKSPACE}/ide/typecheck-errors.sh" > "${RUNNER_TEMP}/before.txt"
           echo "$(wc -l < "${RUNNER_TEMP}/before.txt") errors already there without our patches"
 
@@ -82,3 +86,13 @@ jobs:
             exit 1
           fi
           echo "Our patches apply and add no type errors."
+
+      - name: Keep the typecheck lists
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-errors
+          path: |
+            ${{ runner.temp }}/before.txt
+            ${{ runner.temp }}/after.txt
+          if-no-files-found: ignore

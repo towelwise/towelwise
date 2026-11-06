@@ -252,7 +252,7 @@ index 00000000..a48f85d4
 +
 +		// Entries keep the array order, and the menu would otherwise sort them by name, so each gets an explicit order.
 +		// A group name that comes back after another group is a new section, not a return to the first one, or the
-+		// menu would rearrange what was typed: sections are counted by runs, as the extension's placeEntries does.
++		// menu would rearrange what was typed: sections are counted by runs.
 +		let section = -1;
 +		let previousGroup: string | undefined;
 +		entries.forEach((entry, order) => {
