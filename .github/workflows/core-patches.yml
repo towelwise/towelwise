@@ -68,12 +68,7 @@ jobs:
           # The one postinstall step the typecheck needs: the checksum-verified Electron typings in .build/typings.
           node build/npm/electronTypes.ts
           bash "${GITHUB_WORKSPACE}/ide/typecheck-errors.sh" > "${RUNNER_TEMP}/before.txt"
-          before="${RUNNER_TEMP}/before.txt"
-          echo "$(wc -l < "${before}") errors already there without our patches"
-          # shortcut: a breakdown to find why CI sees far more baseline errors than a local build; drop once explained.
-          echo "By error code:"; grep -oE 'error TS[0-9]+' "${before}" | sort | uniq -c | sort -rn || true
-          echo "Missing modules, names and types:"; grep -oE "Cannot find [a-z ]+ '[^']+'" "${before}" | sort | uniq -c | sort -rn | head -40 || true
-          echo "By file:"; cut -d: -f1 "${before}" | sort | uniq -c | sort -rn | head -40 || true
+          echo "$(wc -l < "${RUNNER_TEMP}/before.txt") errors already there without our patches"
 
       - name: Apply our patches and typecheck again
         working-directory: ${{ runner.temp }}/vscodium/vscode
